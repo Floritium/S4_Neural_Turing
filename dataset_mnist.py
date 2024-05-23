@@ -29,6 +29,9 @@ testset = torchvision.datasets.MNIST(
 trainset, _ = split_train_val(trainset, val_split=0.1)
 _, valset = split_train_val(valset, val_split=0.1)
 
+def get_data():
+    return trainset, valset, testset
+
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
     import numpy as np
