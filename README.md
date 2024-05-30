@@ -64,3 +64,4 @@ Different discretization methods could offer improvements in:
   - [x] https://karpathy.github.io/2015/05/21/rnn-effectiveness/ (Recurrent Neural Networks from andrej kaparthy)
   - [ ] https://colah.github.io/posts/2015-08-Understanding-LSTMs/ (LSTMs)
   - [ ] https://nlp.seas.harvard.edu/2018/04/03/attention.html (Annotated Tranformer)
+  - [ ] https://www.youtube.com/watch?v=AIiwuClvH6k (Attention mechanims)
