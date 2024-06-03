@@ -36,16 +36,9 @@ if __name__ == '__main__':
     import matplotlib.pyplot as plt
     import numpy as np
 
-    def imshow(img):
-        npimg = img.numpy()
-        plt.imshow(np.transpose(npimg, (1, 2, 0)))
-        plt.show()
-
     trainloader = torch.utils.data.DataLoader(trainset, batch_size=4, shuffle=True)
     dataiter = iter(trainloader)
     images, labels = next(dataiter)
-
-    imshow(torchvision.utils.make_grid(images))
-    print(' '.join(f'{labels[j]}' for j in range(4)))
+    
     print(images.shape, len(trainset), len(valset), len(testset))
 
