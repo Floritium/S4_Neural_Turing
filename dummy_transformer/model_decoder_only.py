@@ -1,8 +1,8 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from helper import positional_encoding
-from tokenizer import decode
+from dummy.helper import positional_encoding
+from dummy.tokenizer import decode
 
 class Head(nn.Module):
   def __init__(self, head_size, n_embd, seq_len, dropout=0.1, inference=False):

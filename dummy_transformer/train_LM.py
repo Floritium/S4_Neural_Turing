@@ -1,6 +1,6 @@
 import torch
-from model_decoder_only import DecoderOnly
-from tokenizer import encode, decode, get_batch, text, itos, stoi
+from dummy.model_decoder_only import DecoderOnly
+from dummy.tokenizer import encode, decode, get_batch, text, itos, stoi
 import os
 from tqdm import tqdm
 
