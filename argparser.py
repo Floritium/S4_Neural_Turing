@@ -7,7 +7,7 @@ def get_args():
                         help='path to json file with task specific parameters')
     parser.add_argument('-saved_model', default='model_copy.pt',
                         help='path to file with final model parameters')
-    parser.add_argument('-batch_size', type=int, default=1,
+    parser.add_argument('-batch_size', type=int, default=2,
                         help='batch size of input sequence during training')
     parser.add_argument('-num_steps', type=int, default=10000,
                         help='number of training steps')

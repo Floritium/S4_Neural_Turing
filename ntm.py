@@ -2,7 +2,7 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 
-from modules import Memory, Head, Controller
+from modules import Memory, Head, Controller_LSTM
 
 class NTM(nn.Module):
     
@@ -17,7 +17,7 @@ class NTM(nn.Module):
         
         # Create controller
         self.ctrl_dim = ctrl_dim
-        self.controller = Controller(input_dim + num_heads * memory_unit_size,
+        self.controller = Controller_LSTM(input_dim + num_heads * memory_unit_size,
                                      ctrl_dim, 
                                      output_dim,
                                      ctrl_dim + num_heads * memory_unit_size)
@@ -48,6 +48,9 @@ class NTM(nn.Module):
         
     def forward(self, x):
         '''Returns the output of the Neural Turing Machine'''
+        
+        # use the s4 to process the input @todo
+        
         # Get controller states
         ctrl_hidden, ctrl_cell = self.controller(x, self.prev_reads)
         
@@ -68,6 +71,8 @@ class NTM(nn.Module):
         
         # Compute output
         output = self.controller.output(reads)
+
+        # use the s4 after the output @todo
         
         self.prev_head_weights = head_weights
         self.prev_reads = reads

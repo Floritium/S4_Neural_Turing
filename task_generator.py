@@ -9,14 +9,13 @@ import torchvision
 from torchvision import transforms
 
 class SequentualMNIST(Dataset):
-    def __init__(self, train=True):
-        self.train = train
+    def __init__(self):
         self.transform = transforms.Compose([
             transforms.ToTensor(),
             transforms.Lambda(lambda x: x.view(1, 784).t())
         ])
         self.dataset = torchvision.datasets.MNIST(
-            root='./data/sequential_mnist', train=train, download=True, transform=self.transform)
+            root='./data/sequential_mnist', train=True, download=True, transform=self.transform)
 
     def __len__(self):
         return len(self.dataset)
@@ -142,3 +141,5 @@ if __name__ == "__main__":
     dataset = SequentualMNIST()
     for i in range(10):
         print(dataset[i]['input'].shape, dataset[i]['target'])
+        for j, input in enumerate(dataset[i]['input']):
+            print(j, input)
