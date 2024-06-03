@@ -1,24 +1,27 @@
 import argparse
 
 def get_args():
-    parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
-    parser.add_argument('--batch-size', type=int, default=64, metavar='N',
-                        help='input batch size for training (default: 64)')
-    parser.add_argument('--test-batch-size', type=int, default=32, metavar='N',
-                        help='input batch size for testing (default: 32)')
-    parser.add_argument('--epochs', type=int, default=10, metavar='N',
-                        help='number of epochs to train (default: 10)')
-    parser.add_argument('--lr', type=float, default=0.01, metavar='LR',
-                        help='learning rate (default: 0.01)')
-    parser.add_argument('--momentum', type=float, default=0.5, metavar='M',
-                        help='SGD momentum (default: 0.5)')
-    parser.add_argument('--no-cuda', action='store_true', default=False,
-                        help='disables CUDA training')
-    parser.add_argument('--seed', type=int, default=1, metavar='S',
-                        help='random seed (default: 1)')
-    parser.add_argument('--log-interval', type=int, default=10, metavar='N',
-                        help='how many batches to wait before logging training status')
-    parser.add_argument('--num-workers', type=int, default=4, metavar='N',
-                        help='number of workers for dataloader')
+    # ==== Arguments ====
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-task_json', type=str, default='configs/copy.json',
+                        help='path to json file with task specific parameters')
+    parser.add_argument('-saved_model', default='model_copy.pt',
+                        help='path to file with final model parameters')
+    parser.add_argument('-batch_size', type=int, default=1,
+                        help='batch size of input sequence during training')
+    parser.add_argument('-num_steps', type=int, default=10000,
+                        help='number of training steps')
+
+    parser.add_argument('-lr', type=float, default=1e-4,
+                        help='learning rate for rmsprop optimizer')
+    parser.add_argument('-momentum', type=float, default=0.9,
+                        help='momentum for rmsprop optimizer')
+    parser.add_argument('-alpha', type=float, default=0.95,
+                        help='alpha for rmsprop optimizer')
+    parser.add_argument('-beta1', type=float, default=0.9,
+                        help='beta1 constant for adam optimizer')
+    parser.add_argument('-beta2', type=float, default=0.999,
+                        help='beta2 constant for adam optimizer')
+
     args = parser.parse_args()
     return args
