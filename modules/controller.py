@@ -2,10 +2,10 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 
-class Controller(nn.Module):
+class Controller_LSTM(nn.Module):
     
     def __init__(self, input_dim, ctrl_dim, output_dim, read_data_size):
-        super(Controller, self).__init__()
+        super(Controller_LSTM, self).__init__()
         
         self.input_size = input_dim
         self.ctrl_dim = ctrl_dim
