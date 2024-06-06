@@ -14,6 +14,29 @@ from argparser import get_args
 # ==== Arguments ====
 args = get_args()
 
+# ==== Set the device ====
+# Check if MPS (Apple Silicon) is available
+if args.device == True and torch.backends.mps.is_available() and torch.backends.mps.is_built():
+    device = torch.device('mps')
+# Check if CUDA (NVIDIA GPU) is available
+elif args.device == True and torch.cuda.is_available():
+    device = torch.device('cuda')
+# Fall back to CPU
+else:
+    device = torch.device('cpu')
+
+print('Using device:', device)
+
+# ==== seed ====
+def seed_everything(seed=1234):
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+seed_everything(args.seed)
+
 # Step 1: Open the JSON file
 with open(args.task_json, 'r') as file:
     # Step 2: Load the JSON data
@@ -38,14 +61,14 @@ if task_params['task'] == 'copy' or task_params['task'] == 'associative':
               ctrl_dim=task_params['controller_size'],
               memory_units=task_params['memory_units'],
               memory_unit_size=task_params['memory_unit_size'],
-              num_heads=task_params['num_heads'])
+              num_heads=task_params['num_heads'], device=device).to(device)
 elif task_params['task'] == 'seq_mnist':
     ntm = NTM(input_dim=task_params['seq_width'],
             output_dim=task_params['output_dim'],
             ctrl_dim=task_params['controller_size'],
             memory_units=task_params['memory_units'],
             memory_unit_size=task_params['memory_unit_size'],
-            num_heads=task_params['num_heads'])
+            num_heads=task_params['num_heads'], device=device).to(device)
 
 
 # ==== Training Settings ====
@@ -71,12 +94,12 @@ for step in tqdm(range(args.num_steps)):
     
     optimizer.zero_grad()
     ntm.reset()
+    ntm.to(device)
     
     # Sample data
     data = dataset[step]
     inputs, target = data['input'], data['target']
-
-    print(inputs, target)
+    inputs, target = inputs.to(device), target.to(device)
     
     # Tensor to store outputs
     out = torch.zeros(target.size() if task_params['task'] != 'seq_mnist' else task_params['output_dim'])
@@ -88,27 +111,29 @@ for step in tqdm(range(args.num_steps)):
         
     # Get the outputs from memory without real inputs
     if task_params['task'] == 'seq_mnist':
-        zero_inputs = torch.zeros(inputs.size()[1]).unsqueeze(0)
-        out = ntm(zero_inputs) # logits for cross entropy loss criterion
+        zero_inputs = torch.zeros(inputs.size()[1]).unsqueeze(0).to(device)
+        for i in range(inputs.size()[0]):
+            out = ntm(zero_inputs) # logits for cross entropy loss criterion
     
     elif task_params['task'] == 'copy' or task_params['task'] == 'associative':
-        zero_inputs = torch.zeros(inputs.size()[1]).unsqueeze(0) # dummy inputs
+        zero_inputs = torch.zeros(inputs.size()[1]).unsqueeze(0).to(device) # dummy inputs for reading memory
         for i in range(target.size()[0]):
             out[i] = torch.sigmoid(ntm(zero_inputs)) # sigmoid the logits
     
     # Compute loss, backprop, and optimize
+    out = out.to(device)
     loss = criterion(out, target)
     losses.append(loss.item())
     loss.backward()
-    nn.utils.clip_grad_value_(ntm.parameters(), 10)
+    nn.utils.clip_grad_value_(ntm.parameters(), 1)
     optimizer.step()
     
     # Calculate binary outputs
     binary_output = out.clone()
-    binary_output = binary_output.detach().apply_(lambda x: 0 if x < 0.5 else 1)
+    binary_output = binary_output.cpu().detach().apply_(lambda x: 0 if x < 0.5 else 1)
     
     # Sequence prediction error is calculted in bits per sequence
-    error = torch.sum(torch.abs(binary_output - target))
+    error = torch.sum(torch.abs(binary_output.to(device) - target))
     errors.append(error.item())
     
     # Print Stats

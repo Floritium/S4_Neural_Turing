@@ -4,16 +4,18 @@ from torch import nn
 
 class Memory(nn.Module):
 
-    def __init__(self, memory_units, memory_unit_size):
+    def __init__(self, memory_units, memory_unit_size, device):
         super(Memory, self).__init__()
         
         # N = No. of memory units (rows)
         self.n = memory_units
         # M = Size of each memory unit (cols)
         self.m = memory_unit_size
+
+        self.device = device
         
         # Define the memory matrix of shape (batch_size, N, M)
-        self.memory = torch.zeros([1, self.n, self.m])
+        self.memory = torch.zeros([1, self.n, self.m]).to(self.device)
         
         # Layer to learn initial values for memory reset
         # self.memory_bias_fc = nn.Linear(1, self.n * self.m)
@@ -68,4 +70,4 @@ class Memory(nn.Module):
         # self.memory = memory_bias.view(self.n, self.m).repeat(batch_size, 1, 1)
         
         # Uniform Initialization of 1e-6
-        self.memory = torch.Tensor().new_full((1, self.n, self.m), 1e-6)
+        self.memory = torch.Tensor().new_full((1, self.n, self.m), 1e-6).to(self.device)

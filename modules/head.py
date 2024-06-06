@@ -5,7 +5,7 @@ from torch import nn
 
 class Head(nn.Module):
 
-    def __init__(self, mode, ctrl_dim, memory_unit_size):
+    def __init__(self, mode, ctrl_dim, memory_unit_size, device):
         super(Head, self).__init__()
         # Valid modes are 'r' and 'w' for reading and writing respectively
         self.mode = mode
@@ -15,13 +15,13 @@ class Head(nn.Module):
         self.max_shift = 1
         
         # Linear Layers for converting controller output to addressing parameters
-        self.key_fc = nn.Linear(ctrl_dim, self.m)
-        self.key_strength_fc = nn.Linear(ctrl_dim, 1)
-        self.interpolation_gate_fc = nn.Linear(ctrl_dim, 1)
-        self.shift_weighting_fc = nn.Linear(ctrl_dim, 3)
-        self.sharpen_factor_fc = nn.Linear(ctrl_dim, 1)
-        self.erase_weight_fc = nn.Linear(ctrl_dim, self.m)
-        self.add_data_fc = nn.Linear(ctrl_dim, self.m)
+        self.key_fc = nn.Linear(ctrl_dim, self.m).to(device)
+        self.key_strength_fc = nn.Linear(ctrl_dim, 1).to(device)
+        self.interpolation_gate_fc = nn.Linear(ctrl_dim, 1).to(device) 
+        self.shift_weighting_fc = nn.Linear(ctrl_dim, 3).to(device) 
+        self.sharpen_factor_fc = nn.Linear(ctrl_dim, 1).to(device) 
+        self.erase_weight_fc = nn.Linear(ctrl_dim, self.m).to(device) 
+        self.add_data_fc = nn.Linear(ctrl_dim, self.m).to(device) 
         
         # Reset
         self.reset()

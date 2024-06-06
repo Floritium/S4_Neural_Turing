@@ -22,6 +22,8 @@ def get_args():
                         help='beta1 constant for adam optimizer')
     parser.add_argument('--beta2', type=float, default=0.999,
                         help='beta2 constant for adam optimizer')
+    parser.add_argument('--seed', type=int, default=123)
+    parser.add_argument('--device', type=bool, default=False)
 
     args = parser.parse_args()
     return args
