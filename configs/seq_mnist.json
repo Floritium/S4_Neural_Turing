@@ -6,5 +6,5 @@
     "num_heads": 1,
     "seq_width": 1,
     "output_dim": 10,
-    "resize_resolution": 28
+    "resize_resolution": 5
 }

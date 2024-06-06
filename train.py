@@ -125,7 +125,7 @@ for step in tqdm(range(args.num_steps)):
     loss = criterion(out, target)
     losses.append(loss.item())
     loss.backward()
-    nn.utils.clip_grad_value_(ntm.parameters(), 1)
+    nn.utils.clip_grad_value_(ntm.parameters(), 0.5)
     optimizer.step()
     
     # Calculate binary outputs
@@ -133,11 +133,11 @@ for step in tqdm(range(args.num_steps)):
     binary_output = binary_output.cpu().detach().apply_(lambda x: 0 if x < 0.5 else 1)
     
     # Sequence prediction error is calculted in bits per sequence
-    error = torch.sum(torch.abs(binary_output.to(device) - target))
+    error = torch.sum(torch.abs(binary_output.cpu() - target.cpu()))
     errors.append(error.item())
     
     # Print Stats
-    if step % 200 == 0:
+    if step % args.eval_steps == 0:
         print('Step {} == Loss {:.3f} == Error {} bits per sequence'.format(step, np.mean(losses), np.mean(errors)))
         losses = []
         errors = []
