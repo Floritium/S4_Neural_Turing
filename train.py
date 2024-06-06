@@ -43,6 +43,28 @@ with open(args.task_json, 'r') as file:
     task_params = json.load(file)
 
 
+def progress_clean():
+    """Clean the progress bar."""
+    print("\r{}".format(" " * 80), end='\r')
+
+def save_checkpoint(net, name, args, step, losses, costs, seq_lengths):
+    progress_clean()
+
+    basename = "{}/{}-{}-batch-{}".format(args.checkpoint_path, name, args.seed, step)
+    model_fname = basename + ".pth"
+    print(f"Saving model checkpoint to: {model_fname}")
+    torch.save(net.state_dict(), model_fname)
+
+    # Save the training history
+    train_fname = basename + ".json"
+    print(f"Saving model training history to {train_fname}")
+    content = {
+        "loss": losses,
+        "cost": costs,
+        "seq_lengths": seq_lengths
+    }
+    open(train_fname, 'wt').write(json.dumps(content))
+
 # ==== Create Dataset / task ====
 task_params = json.load(open(args.task_json)) # Load task parameters
 
@@ -125,7 +147,7 @@ for step in tqdm(range(args.num_steps)):
     loss = criterion(out, target)
     losses.append(loss.item())
     loss.backward()
-    nn.utils.clip_grad_value_(ntm.parameters(), 0.5)
+    nn.utils.clip_grad_value_(ntm.parameters(), 1)
     optimizer.step()
     
     # Calculate binary outputs
@@ -135,14 +157,13 @@ for step in tqdm(range(args.num_steps)):
     # Sequence prediction error is calculted in bits per sequence
     error = torch.sum(torch.abs(binary_output.cpu() - target.cpu()))
     errors.append(error.item())
-    
+        
     # Print Stats
     if step % args.eval_steps == 0:
-        print('Step {} == Loss {:.3f} == Error {} bits per sequence'.format(step, np.mean(losses), np.mean(errors)))
-        losses = []
-        errors = []
-        
-# Save model
-torch.save(ntm.state_dict(), args.saved_model)
+        print('Step {} == Loss {:.3f} == Error {} bits per sequence'.format(step, np.mean(losses[-args.eval_steps:]), np.mean(errors[-args.eval_steps:])))
+    
+    # save checkpoint
+    if (args.checkpoint_interval != 0) and (step % args.checkpoint_interval == 0):
+        save_checkpoint(ntm, task_params['task'], args, step, losses, errors, inputs.size()[0])
     
     

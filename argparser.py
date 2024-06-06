@@ -1,4 +1,5 @@
 import argparse
+import os
 
 def get_args():
     # ==== Arguments ====
@@ -26,6 +27,11 @@ def get_args():
     parser.add_argument('--device', type=bool, default=False)
     parser.add_argument('--eval_steps', type=int, default=100,
                         help='number of evaluation steps')
+    parser.add_argument('--checkpoint_path', type=str, default='checkpoints', help='directory to store checkpointed models')
+    parser.add_argument('--checkpoint_interval', type=int, default=1000, help='checkpoint interval')
 
     args = parser.parse_args()
+
+    os.makedirs(args.checkpoint_path, exist_ok=True)
+
     return args
