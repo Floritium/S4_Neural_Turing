@@ -1,0 +1,10 @@
+{
+    "task": "seq_mnist",
+    "controller_size": 100,
+    "memory_units": 128,
+    "memory_unit_size": 20,
+    "num_heads": 1,
+    "seq_width": 1,
+    "output_dim": 10,
+    "resize_resolution": 28
+}
