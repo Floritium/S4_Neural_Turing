@@ -50,7 +50,11 @@ elif task_params['task'] == 'seq_mnist':
 
 # ==== Training Settings ====
 # Loss Function
-criterion = nn.BCELoss()
+if task_params['task'] == 'seq_mnist':
+    criterion = nn.CrossEntropyLoss()
+else:
+    criterion = nn.BCELoss()
+
 optimizer = optim.RMSprop(ntm.parameters(),
                           lr=args.lr,
                           alpha=args.alpha,
@@ -85,12 +89,12 @@ for step in tqdm(range(args.num_steps)):
     # Get the outputs from memory without real inputs
     if task_params['task'] == 'seq_mnist':
         zero_inputs = torch.zeros(inputs.size()[1]).unsqueeze(0)
-        out = ntm(zero_inputs)
+        out = ntm(zero_inputs) # logits for cross entropy loss criterion
     
     elif task_params['task'] == 'copy' or task_params['task'] == 'associative':
         zero_inputs = torch.zeros(inputs.size()[1]).unsqueeze(0) # dummy inputs
         for i in range(target.size()[0]):
-            out[i] = ntm(zero_inputs)
+            out[i] = torch.sigmoid(ntm(zero_inputs)) # sigmoid the logits
     
     # Compute loss, backprop, and optimize
     loss = criterion(out, target)

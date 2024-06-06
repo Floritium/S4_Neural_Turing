@@ -40,7 +40,7 @@ class Controller_LSTM(nn.Module):
         '''Returns the external output from the read vectors'''
         out_state = torch.cat([self.h_state, *reads], dim=1)
         # Compute output
-        output = torch.sigmoid(self.out_net(out_state))
+        output = self.out_net(out_state) # logits
         
         return output
         
