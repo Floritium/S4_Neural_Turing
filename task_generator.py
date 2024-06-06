@@ -15,9 +15,9 @@ class SequentialMNIST(Dataset):
         
         # Define the transformation to be applied to the data
         self.transform = transforms.Compose([
-            transforms.Resize((resize_resolution, resize_resolution)),  # Resize to higher resolution, e.g., 56x56
+            transforms.Resize((self.resize_resolution, self.resize_resolution)),  # Resize to higher resolution, e.g., 56x56
             transforms.ToTensor(),
-            transforms.Lambda(lambda x: x.view(1, resize_resolution * resize_resolution).t())  # Adjust view for new resolution
+            transforms.Lambda(lambda x: x.view(1, self.resize_resolution * self.resize_resolution).t())  # Adjust view for new resolution
         ])
 
         # Load the MNIST dataset
@@ -25,7 +25,7 @@ class SequentialMNIST(Dataset):
             root='./data/sequential_mnist', train=True, download=True, transform=self.transform)
 
         # hardcoded as MNIST images are 28x28, but here we resize
-        self.seq_len = resize_resolution * resize_resolution
+        self.seq_len = self.resize_resolution * self.resize_resolution
 
     def __len__(self):
         return len(self.dataset)
@@ -148,8 +148,16 @@ class AssociativeDataset(Dataset):
 
 
 if __name__ == "__main__":
-    dataset = SequentualMNIST()
+    import json
+    from matplotlib import pyplot as plt
+
+    with open('configs/seq_mnist.json') as f:
+        task_params = json.load(f)
+
+    dataset = SequentialMNIST(task_params)
     for i in range(10):
         print(dataset[i]['input'].shape, dataset[i]['target'])
-        for j, input in enumerate(dataset[i]['input']):
-            print(j, input)
+        image = dataset[i]['input'].numpy().reshape((task_params["resize_resolution"], task_params["resize_resolution"]))
+        plt.imshow(image, cmap='gray')
+        plt.show()
+        break
