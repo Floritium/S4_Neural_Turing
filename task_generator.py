@@ -33,7 +33,7 @@ class SequentialMNIST(Dataset):
     def __getitem__(self, idx):
         input_seq = self.dataset[idx][0]
         target_label = self.dataset[idx][1]
-        return {'input': input_seq, 'target': target_label}
+        return {'input': input_seq, 'target': torch.tensor([target_label])}
 
 class CopyDataset(Dataset):
     """A Dataset class to generate random examples for the copy task. Each
@@ -156,7 +156,7 @@ if __name__ == "__main__":
 
     dataset = SequentialMNIST(task_params)
     for i in range(10):
-        print(dataset[i]['input'].shape, dataset[i]['target'])
+        print(dataset[i]['input'].shape, type(dataset[i]['target']), dataset[i]['target'].item())
         image = dataset[i]['input'].numpy().reshape((task_params["resize_resolution"], task_params["resize_resolution"]))
         plt.imshow(image, cmap='gray')
         plt.show()
