@@ -8,14 +8,24 @@ from torch.distributions.binomial import Binomial
 import torchvision
 from torchvision import transforms
 
-class SequentualMNIST(Dataset):
-    def __init__(self):
+class SequentialMNIST(Dataset):
+    def __init__(self, task_params):
+
+        self.resize_resolution = task_params['resize_resolution']
+        
+        # Define the transformation to be applied to the data
         self.transform = transforms.Compose([
+            transforms.Resize((resize_resolution, resize_resolution)),  # Resize to higher resolution, e.g., 56x56
             transforms.ToTensor(),
-            transforms.Lambda(lambda x: x.view(1, 784).t())
+            transforms.Lambda(lambda x: x.view(1, resize_resolution * resize_resolution).t())  # Adjust view for new resolution
         ])
+
+        # Load the MNIST dataset
         self.dataset = torchvision.datasets.MNIST(
             root='./data/sequential_mnist', train=True, download=True, transform=self.transform)
+
+        # hardcoded as MNIST images are 28x28, but here we resize
+        self.seq_len = resize_resolution * resize_resolution
 
     def __len__(self):
         return len(self.dataset)

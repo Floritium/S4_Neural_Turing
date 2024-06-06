@@ -8,27 +8,45 @@ import torch
 from torch import nn, optim
 
 from ntm import NTM
-from task_generator import CopyDataset, AssociativeDataset
+from task_generator import CopyDataset, AssociativeDataset, SequentialMNIST
 from argparser import get_args
 
 # ==== Arguments ====
 args = get_args()
 
+# Step 1: Open the JSON file
+with open(args.task_json, 'r') as file:
+    # Step 2: Load the JSON data
+    task_params = json.load(file)
 
-# ==== Create Dataset ====
-# Copy Task
-task_params = json.load(open(args.task_json))
-dataset = CopyDataset(task_params)
-# Associative Recall Task
-# dataset = AssociativeDataset(task_params)
+
+# ==== Create Dataset / task ====
+task_params = json.load(open(args.task_json)) # Load task parameters
+
+# Create dataset
+if task_params['task'] == 'copy':
+    dataset = CopyDataset(task_params)
+elif task_params['task'] == 'associative':
+    dataset = AssociativeDataset(task_params)
+elif task_params['task'] == 'seq_mnist':
+    dataset = SequentialMNIST(task_params)
 
 # ==== Create NTM ====
-ntm = NTM(input_dim=task_params['seq_width'] + 2,
-          output_dim=task_params['seq_width'],
-          ctrl_dim=task_params['controller_size'],
-          memory_units=task_params['memory_units'],
-          memory_unit_size=task_params['memory_unit_size'],
-          num_heads=task_params['num_heads'])
+if task_params['task'] == 'copy' or task_params['task'] == 'associative':
+    ntm = NTM(input_dim=task_params['seq_width'] + 2,
+              output_dim=task_params['seq_width'],
+              ctrl_dim=task_params['controller_size'],
+              memory_units=task_params['memory_units'],
+              memory_unit_size=task_params['memory_unit_size'],
+              num_heads=task_params['num_heads'])
+elif task_params['task'] == 'seq_mnist':
+    ntm = NTM(input_dim=task_params['seq_width'],
+            output_dim=task_params['output_dim'],
+            ctrl_dim=task_params['controller_size'],
+            memory_units=task_params['memory_units'],
+            memory_unit_size=task_params['memory_unit_size'],
+            num_heads=task_params['num_heads'])
+
 
 # ==== Training Settings ====
 # Loss Function
@@ -53,9 +71,11 @@ for step in tqdm(range(args.num_steps)):
     # Sample data
     data = dataset[step]
     inputs, target = data['input'], data['target']
+
+    print(inputs, target)
     
     # Tensor to store outputs
-    out = torch.zeros(target.size())
+    out = torch.zeros(target.size() if task_params['task'] != 'seq_mnist' else task_params['output_dim'])
     
     # Process the inputs through NTM for memorization
     for i in range(inputs.size()[0]):
@@ -63,9 +83,14 @@ for step in tqdm(range(args.num_steps)):
         ntm(inputs[i].unsqueeze(0))
         
     # Get the outputs from memory without real inputs
-    zero_inputs = torch.zeros(inputs.size()[1]).unsqueeze(0) # dummy inputs
-    for i in range(target.size()[0]):
-        out[i] = ntm(zero_inputs)
+    if task_params['task'] == 'seq_mnist':
+        zero_inputs = torch.zeros(inputs.size()[1]).unsqueeze(0)
+        out = ntm(zero_inputs)
+    
+    elif task_params['task'] == 'copy' or task_params['task'] == 'associative':
+        zero_inputs = torch.zeros(inputs.size()[1]).unsqueeze(0) # dummy inputs
+        for i in range(target.size()[0]):
+            out[i] = ntm(zero_inputs)
     
     # Compute loss, backprop, and optimize
     loss = criterion(out, target)
