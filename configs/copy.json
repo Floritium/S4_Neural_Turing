@@ -1,4 +1,5 @@
 {
+    "model": "ntm+lstm",
     "task": "copy",
     "controller_size": 100,
     "memory_units": 128,
