@@ -1,3 +1,9 @@
 data
 ipynb_checkpoints
 checkpoints
+*.pyc
+*.wandb
+wandb
+*.cpython-312.pyc
+*.pt
+*.json
