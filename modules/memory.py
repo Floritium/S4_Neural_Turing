@@ -1,6 +1,7 @@
 import torch
 import torch.nn.functional as F
 from torch import nn
+import numpy as np
 
 class Memory(nn.Module):
 
@@ -19,7 +20,15 @@ class Memory(nn.Module):
         
         # Layer to learn initial values for memory reset
         # self.memory_bias_fc = nn.Linear(1, self.n * self.m)
-        
+
+        # The memory bias allows the heads to learn how to initially address
+        # memory locations by content
+        self.register_buffer('mem_bias', torch.Tensor(self.n, self.m))
+
+        # Initialize memory bias
+        stdev = 1 / (np.sqrt(self.n + self.m))
+        nn.init.uniform_(self.mem_bias, -stdev, stdev)
+
         # Reset/Initialize
         self.reset()
         
@@ -70,4 +79,5 @@ class Memory(nn.Module):
         # self.memory = memory_bias.view(self.n, self.m).repeat(batch_size, 1, 1)
         
         # Uniform Initialization of 1e-6
-        self.memory = torch.Tensor().new_full((1, self.n, self.m), 1e-6).to(self.device)
+        # self.memory = torch.Tensor().new_full((1, self.n, self.m), 1e-6).to(self.device)
+        self.memory = self.mem_bias.clone().repeat(batch_size, 1, 1)
