@@ -11,6 +11,9 @@ from ntm import NTM
 from task_generator import CopyDataset, AssociativeDataset, SequentialMNIST
 from argparser import get_args
 
+import wandb
+import datetime
+
 # ==== Arguments ====
 args = get_args()
 
@@ -47,10 +50,10 @@ def progress_clean():
     """Clean the progress bar."""
     print("\r{}".format(" " * 80), end='\r')
 
-def save_checkpoint(net, name, args, step, losses, costs, seq_lengths):
+def save_checkpoint(net, task_params, args, step, losses, costs, seq_lengths, time):
     progress_clean()
 
-    basename = "{}/{}-{}-batch-{}".format(args.checkpoint_path, name, args.seed, step)
+    basename = "{}/{}-{}-{}-batch-{}-{}".format(args.checkpoint_path, task_params["model"], task_params["task"], args.seed, step, time)
     model_fname = basename + ".pth"
     print(f"Saving model checkpoint to: {model_fname}")
     torch.save(net.state_dict(), model_fname)
@@ -61,7 +64,9 @@ def save_checkpoint(net, name, args, step, losses, costs, seq_lengths):
     content = {
         "loss": losses,
         "cost": costs,
-        "seq_lengths": seq_lengths
+        "seq_lengths": seq_lengths,
+        "parameters_model": vars(args),
+        "parameters_task": task_params, # task_params is already a type dict
     }
     open(train_fname, 'wt').write(json.dumps(content))
 
@@ -74,7 +79,8 @@ if task_params['task'] == 'copy':
 elif task_params['task'] == 'associative':
     dataset = AssociativeDataset(task_params)
 elif task_params['task'] == 'seq_mnist':
-    dataset = SequentialMNIST(task_params)
+    dataset = SequentialMNIST(task_params, train=True)
+    print('Dataset size:', len(dataset))
 
 # ==== Create NTM ====
 if task_params['task'] == 'copy' or task_params['task'] == 'associative':
@@ -92,6 +98,26 @@ elif task_params['task'] == 'seq_mnist':
             memory_unit_size=task_params['memory_unit_size'],
             num_heads=task_params['num_heads'], device=device).to(device)
 
+if args.resume_training:
+    file_name = args.saved_model
+
+    task_params = json.load(open(file_name))
+    task_params = task_params['parameters_task']
+
+    ntm = NTM(input_dim=task_params['seq_width'],
+            output_dim=task_params['output_dim'],
+            ctrl_dim=task_params['controller_size'],
+            memory_units=task_params['memory_units'],
+            memory_unit_size=task_params['memory_unit_size'],
+            num_heads=task_params['num_heads'], device=device).to(device)
+
+    # Add the new extension
+    base = os.path.splitext(file_name)[0]
+    new_file_name = base + ".pth"
+
+    ntm.load_state_dict(torch.load(new_file_name))
+    print("Model loaded from", new_file_name)
+
 
 # ==== Training Settings ====
 # Loss Function
@@ -100,23 +126,54 @@ if task_params['task'] == 'seq_mnist':
 else:
     criterion = nn.BCELoss()
 
-optimizer = optim.RMSprop(ntm.parameters(),
-                          lr=args.lr,
-                          alpha=args.alpha,
-                          momentum=args.momentum)
+# optimizer = optim.RMSprop(ntm.parameters(),
+#                           lr=args.lr,
+#                           alpha=args.alpha,
+#                           momentum=args.momentum)
 
-# optimizer = optim.Adam(ntm.parameters(), lr=args.lr,
-#                        betas=(args.beta1, args.beta2))
+optimizer = optim.Adam(ntm.parameters(), lr=args.lr,
+                       betas=(args.beta1, args.beta2))
+
+
+# === WandB ===
+
+# Initialize wandb and set the configuration
+wandb.init(project="nn-seminar", 
+
+    config={
+    "task_json": args.task_json,
+    "saved_model": args.saved_model,
+    "batch_size": args.batch_size,
+    "num_steps": args.num_steps,
+    "learning_rate": args.lr,
+    "momentum": args.momentum,
+    "alpha": args.alpha,
+    "beta1": args.beta1,
+    "beta2": args.beta2,
+    "seed": args.seed,
+    "device": args.device,
+    "eval_steps": args.eval_steps,
+    "checkpoint_path": args.checkpoint_path,
+    "checkpoint_interval": args.checkpoint_interval,
+    },    
+    mode="online" if args.log else "disabled"
+)
+
 
 # ==== Training ====
+
+# log time for chekpoints
+time = ''.join(str(datetime.datetime.now()).split())
+
 losses = []
 errors = []
+ntm.to(device)
+ntm.train()
 
 for step in tqdm(range(args.num_steps)):
     
     optimizer.zero_grad()
     ntm.reset()
-    ntm.to(device)
     
     # Sample data
     data = dataset[step]
@@ -129,25 +186,26 @@ for step in tqdm(range(args.num_steps)):
     # Process the inputs through NTM for memorization
     for i in range(inputs.size()[0]):
         # Forward passing all sequences for read
-        ntm(inputs[i].unsqueeze(0))
-        
+        # print(inputs[i].unsqueeze(0).shape, target.shape)
+        ntm(inputs[i].unsqueeze(0), memorize=True)
+    
+
+    zero_inputs = torch.zeros(inputs.size()[1]).unsqueeze(0).to(device) # dummy inputs for reading memory
+
     # Get the outputs from memory without real inputs
     if task_params['task'] == 'seq_mnist':
-        zero_inputs = torch.zeros(inputs.size()[1]).unsqueeze(0).to(device)
         for i in range(inputs.size()[0]):
-            out = ntm(zero_inputs) # logits for cross entropy loss criterion
-    
+            out = ntm(zero_inputs, memorize=False) # logits for cross entropy loss criterion
     elif task_params['task'] == 'copy' or task_params['task'] == 'associative':
-        zero_inputs = torch.zeros(inputs.size()[1]).unsqueeze(0).to(device) # dummy inputs for reading memory
         for i in range(target.size()[0]):
-            out[i] = torch.sigmoid(ntm(zero_inputs)) # sigmoid the logits
+            out[i] = torch.sigmoid(ntm(zero_inputs, memorize=False)) # sigmoid the logits
     
     # Compute loss, backprop, and optimize
     out = out.to(device)
     loss = criterion(out, target)
     losses.append(loss.item())
     loss.backward()
-    nn.utils.clip_grad_value_(ntm.parameters(), 1)
+    nn.utils.clip_grad_value_(ntm.parameters(), 0.5)
     optimizer.step()
     
     # Calculate binary outputs
@@ -161,9 +219,10 @@ for step in tqdm(range(args.num_steps)):
     # Print Stats
     if step % args.eval_steps == 0:
         print('Step {} == Loss {:.3f} == Error {} bits per sequence'.format(step, np.mean(losses[-args.eval_steps:]), np.mean(errors[-args.eval_steps:])))
-    
+        wandb.log({"Training/Loss": np.mean(losses[-args.eval_steps:]), "Training/Error": np.mean(errors[-args.eval_steps:])}, step=step)
+
     # save checkpoint
     if (args.checkpoint_interval != 0) and (step % args.checkpoint_interval == 0):
-        save_checkpoint(ntm, task_params['task'], args, step, losses, errors, inputs.size()[0])
+        save_checkpoint(ntm, task_params, args, step, losses, errors, inputs.size()[0], time)
     
     

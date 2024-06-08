@@ -9,7 +9,7 @@ import torchvision
 from torchvision import transforms
 
 class SequentialMNIST(Dataset):
-    def __init__(self, task_params):
+    def __init__(self, task_params, train=True):
 
         self.resize_resolution = task_params['resize_resolution']
         
@@ -17,12 +17,13 @@ class SequentialMNIST(Dataset):
         self.transform = transforms.Compose([
             transforms.Resize((self.resize_resolution, self.resize_resolution)),  # Resize to higher resolution, e.g., 56x56
             transforms.ToTensor(),
+            transforms.Normalize((0.5,), (0.5,)),  # Normalize the tensor to have pixel values in [-1, 1]
             transforms.Lambda(lambda x: x.view(1, self.resize_resolution * self.resize_resolution).t())  # Adjust view for new resolution
         ])
 
         # Load the MNIST dataset
         self.dataset = torchvision.datasets.MNIST(
-            root='./data/sequential_mnist', train=True, download=True, transform=self.transform)
+            root='./data/sequential_mnist', train=train, download=True, transform=self.transform)
 
         # hardcoded as MNIST images are 28x28, but here we resize
         self.seq_len = self.resize_resolution * self.resize_resolution

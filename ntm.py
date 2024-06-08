@@ -50,10 +50,11 @@ class NTM(nn.Module):
         self.reset()
         
         
-    def forward(self, x):
+    def forward(self, x, memorize=True):
         '''Returns the output of the Neural Turing Machine'''
         
         # use the s4 to process the input @todo
+        output = None
         
         # Get controller states
         ctrl_hidden, ctrl_cell = self.controller(x, self.prev_reads)
@@ -74,7 +75,8 @@ class NTM(nn.Module):
             head_weights.append(weights)
         
         # Compute output
-        output = self.controller.output(reads)
+        if memorize != True:
+            output = self.controller.output(reads)
 
         # use the s4 after the output @todo
         

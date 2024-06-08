@@ -8,7 +8,7 @@ def get_args():
                         help='path to json file with task specific parameters')
     parser.add_argument('--saved_model', default='model_copy.pt',
                         help='path to file with final model parameters')
-    parser.add_argument('--batch_size', type=int, default=2,
+    parser.add_argument('--batch_size', type=int, default=1,
                         help='batch size of input sequence during training')
     parser.add_argument('--num_steps', type=int, default=10000,
                         help='number of training steps')
@@ -29,6 +29,8 @@ def get_args():
                         help='number of evaluation steps')
     parser.add_argument('--checkpoint_path', type=str, default='checkpoints', help='directory to store checkpointed models')
     parser.add_argument('--checkpoint_interval', type=int, default=1000, help='checkpoint interval')
+    parser.add_argument('--log', type=bool, default=False, help='log to wandb')
+    parser.add_argument('--resume_training', type=bool, default=False, help='resume_training')
 
     args = parser.parse_args()
 
