@@ -18,19 +18,18 @@ class LSTMController(nn.Module):
         self.lstm = nn.LSTM(input_size=num_inputs,
                             hidden_size=num_outputs,
                             num_layers=num_layers,
-                            batch_first=False)
+                            batch_first=False).to(device)
 
         # The hidden state is a learned parameter
-        self.lstm_h_bias = Parameter(torch.randn(self.num_layers, 1, self.num_outputs) * 0.05)
-        self.lstm_c_bias = Parameter(torch.randn(self.num_layers, 1, self.num_outputs) * 0.05)
+        self.lstm_h_bias = Parameter(torch.randn(self.num_layers, 1, self.num_outputs) * 0.05).to(device)
+        self.lstm_c_bias = Parameter(torch.randn(self.num_layers, 1, self.num_outputs) * 0.05).to(device)
 
         self.reset_parameters()
-        self.to_device(device)
 
     def create_new_state(self, batch_size):
         # Dimension: (num_layers * num_directions, batch, hidden_size)
-        lstm_h = self.lstm_h_bias.clone().repeat(1, batch_size, 1).to(self.device)
-        lstm_c = self.lstm_c_bias.clone().repeat(1, batch_size, 1).to(self.device)
+        lstm_h = self.lstm_h_bias.clone().repeat(1, batch_size, 1)
+        lstm_c = self.lstm_c_bias.clone().repeat(1, batch_size, 1)
         return lstm_h, lstm_c
 
     def reset_parameters(self):
@@ -49,8 +48,8 @@ class LSTMController(nn.Module):
         outp, state = self.lstm(x, prev_state)
         return outp.squeeze(0), state
 
-    def to_device(self, device):
-        """Move model and its parameters to a specified device."""
-        self.to(device)
-        self.lstm_h_bias.data = self.lstm_h_bias.data.to(device)
-        self.lstm_c_bias.data = self.lstm_c_bias.data.to(device)
+    # def to_device(self, device):
+    #     """Move model and its parameters to a specified device."""
+    #     self.to(device)
+    #     self.lstm_h_bias.data = self.lstm_h_bias.data.to(device)
+    #     self.lstm_c_bias.data = self.lstm_c_bias.data.to(device)

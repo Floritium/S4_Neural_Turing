@@ -37,8 +37,8 @@ class NTM(nn.Module):
         for head in heads:
             if head.is_read_head():
                 init_r_bias = torch.randn(1, self.M) * 0.01
-                self.register_buffer("read{}_bias".format(self.num_read_heads), init_r_bias.data)
-                self.init_r += [init_r_bias]
+                self.register_buffer("read{}_bias".format(self.num_read_heads), init_r_bias.data.to(device))
+                self.init_r += [init_r_bias.to(device)]
                 self.num_read_heads += 1
 
         assert self.num_read_heads > 0, "heads list must contain at least a single read head"
@@ -50,7 +50,7 @@ class NTM(nn.Module):
         self.reset_parameters()
 
     def create_new_state(self, batch_size):
-        init_r = [r.clone().repeat(batch_size, 1).to(self.device) for r in self.init_r]
+        init_r = [r.clone().repeat(batch_size, 1) for r in self.init_r]
         controller_state = self.controller.create_new_state(batch_size)
         heads_state = [head.create_new_state(batch_size) for head in self.heads]
 

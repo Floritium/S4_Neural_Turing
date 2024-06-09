@@ -25,12 +25,14 @@ LOGGER = logging.getLogger(__name__)
 
 from tasks.copytask import CopyTaskModelTraining, CopyTaskParams
 from tasks.repeatcopytask import RepeatCopyTaskModelTraining, RepeatCopyTaskParams
-from tasks.seq_mnist import SeqMNISTModelTraining, SeqMNISTParams
+from tasks.seq_mnist import SeqMNISTModelTraining_ntm, SeqMNISTModelTraining_lstm, SeqMNISTParams
 
 TASKS = {
     'copy': (CopyTaskModelTraining, CopyTaskParams),
     'repeat-copy': (RepeatCopyTaskModelTraining, RepeatCopyTaskParams),
-    'seq-mnist': (SeqMNISTModelTraining, SeqMNISTParams)
+    'seq-mnist-ntm': (SeqMNISTModelTraining_ntm, SeqMNISTParams),
+    'seq-mnist-lstm': (SeqMNISTModelTraining_lstm, SeqMNISTParams)
+
 }
 
 
@@ -66,7 +68,7 @@ def progress_bar(batch_num, report_interval, last_loss):
 def save_checkpoint(net, name, args, model_parms, batch_num, losses, costs, seq_lengths, time):
     progress_clean()
 
-    basename = "{}/{}-{}-batch-{}-{}".format(args.checkpoint_path, name, args.seed, batch_num, time)
+    basename = "{}/{}-{}-{}-batch-{}-{}".format(args.checkpoint_path, args.task, name, args.seed, batch_num, time)
     model_fname = basename + ".pth"
     LOGGER.info("Saving model checkpoint to: '%s'", model_fname)
     torch.save(net.state_dict(), model_fname)
@@ -90,36 +92,35 @@ def clip_grads(net):
         p.grad.data.clamp_(-1, 1)
 
 
-def train_batch(net, criterion, optimizer, X, Y, args):
+def train_batch_ntm(net, criterion, optimizer, X, Y, args):
     """Trains a single batch."""
+
 
     # Transfer to GPU
     X = X.to(net.device)
     Y = Y.to(net.device)
 
     # reset the input sequence and target sequence
-    if args.task == 'seq-mnist':
+    if args.task == 'seq-mnist-ntm':
         X = X.permute(1, 0, 2)
         Y = Y.squeeze(1)
+    
+    batch_size = X.size(1)
+    net.init_sequence(batch_size)
     
     optimizer.zero_grad()
     inp_seq_len = X.size(0)
 
     # get the size of the output sequence for copy and recall task
-    if args.task != 'seq-mnist':
+    if args.task != 'seq-mnist-ntm':
         outp_seq_len, batch_size, _ = Y.size()
-
-    # New sequence
-    batch_size = X.size(1)
-    net.init_sequence(batch_size)
-    # net.to_device()
 
     # Feed the sequence + delimiter
     for i in range(inp_seq_len):
         y_out, _ , = net(X[i])
 
     # Read the output (no input given)
-    if args.task != 'seq-mnist':
+    if args.task != 'seq-mnist-ntm':
         y_out = torch.zeros(Y.size())
         for i in range(outp_seq_len):
             out, _ = net()
@@ -181,6 +182,34 @@ def evaluate(net, criterion, X, Y):
     return result
 
 
+def train_batch_lstm(net, criterion, optimizer, X, Y, args):
+    """Trains a single batch."""
+
+    optimizer.zero_grad()
+
+    # Transfer to GPU
+    X = X.to(net.device)
+    Y = Y.to(net.device)
+
+    X = X.permute(1, 0, 2)
+    Y = Y.squeeze(1)
+
+    # Forward
+    Y_pred = net(X).squeeze(0)
+
+    # Compute the loss
+    loss = criterion(Y_pred, Y)
+    loss.backward()
+
+    # Clip gradients
+    clip_grads(net)
+
+    # Update parameters
+    optimizer.step()
+
+    return loss.item()
+
+
 def train_model(model, args):
     num_batches = model.params.num_batches
     batch_size = model.params.batch_size
@@ -189,15 +218,21 @@ def train_model(model, args):
     LOGGER.info("Training model for %d batches (batch_size=%d - num_samples=%d)...",
                 num_batches, batch_size, num_samples)
 
+    model.net.to_device()
+
     losses = []
     costs = []
     seq_lengths = []
     start_ms = get_ms()
 
-    time = ''.join(str(datetime.datetime.now()).split())
+    time = ''.join(str(datetime.datetime.now().strftime("%Y-%m-%d %H-%M-%S")).split())
 
     for batch_num, (x, y) in enumerate(tqdm(model.dataloader)):
-        loss, cost = train_batch(model.net, model.criterion, model.optimizer, x, y, args)
+        if args.task == 'seq-mnist-ntm' or args.task == 'copy' or args.task == 'repeat-copy':
+            loss, cost = train_batch_ntm(model.net, model.criterion, model.optimizer, x, y, args)
+        elif args.task == 'seq-mnist-lstm':
+            loss = train_batch_lstm(model.net, model.criterion, model.optimizer, x, y, args)
+            cost = loss
         
         losses += [loss]
         costs += [cost]
@@ -274,8 +309,6 @@ def init_logging():
 
 def main():
     init_logging()
-
-
 
     os.makedirs('checkpoints', exist_ok=True)
 

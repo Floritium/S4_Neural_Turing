@@ -11,6 +11,7 @@ from torch.utils.data import Dataset
 from torchvision import transforms
 import torchvision
 from torch.utils.data import DataLoader
+from lstm_linear import LSTMWithLinearLayer
 
 class SequentialMNIST(Dataset):
     def __init__(self, task_params, train=True):
@@ -60,11 +61,11 @@ class SeqMNISTParams(object):
     controller_size = attrib(default=100)
     controller_layers = attrib(default=1)
     num_heads = attrib(default=1)
-    resize_resolution = attrib(default=14)
+    resize_resolution = attrib(default=8)
     input_dim = attrib(default=1)
     output_dim = attrib(default=10)
     memory_n = attrib(default=128)
-    memory_m = attrib(default=20)
+    memory_m = attrib(default=5)
     num_batches = attrib(default=250000)
     batch_size = attrib(default=64)
     rmsprop_lr = attrib(default=1e-4)
@@ -74,7 +75,7 @@ class SeqMNISTParams(object):
 
 
 @attrs
-class SeqMNISTModelTraining(object):
+class SeqMNISTModelTraining_ntm(object):
     params = attrib(default=Factory(SeqMNISTParams))
     net = attrib()
     dataloader = attrib()
@@ -93,6 +94,49 @@ class SeqMNISTModelTraining(object):
             self.params.num_heads,
             self.params.memory_n,
             self.params.memory_m,
+            self.params.device,
+        )
+        return net
+
+    @dataloader.default
+    def default_dataloader(self):
+        dataloader = torch.utils.data.DataLoader(
+            SequentialMNIST({"resize_resolution": self.params.resize_resolution}),
+            batch_size=self.params.batch_size,
+            shuffle=False,
+        )
+        self.params.num_batches = len(dataloader)
+        return dataloader
+
+    @criterion.default
+    def default_criterion(self):
+        return nn.CrossEntropyLoss()
+
+    @optimizer.default
+    def default_optimizer(self):
+        return optim.RMSprop(
+            self.net.parameters(),
+            momentum=self.params.rmsprop_momentum,
+            alpha=self.params.rmsprop_alpha,
+            lr=self.params.rmsprop_lr,
+        )
+
+@attrs
+class SeqMNISTModelTraining_lstm(object):
+    params = attrib(default=Factory(SeqMNISTParams))
+    net = attrib()
+    dataloader = attrib()
+    criterion = attrib()
+    optimizer = attrib()
+
+    @net.default
+    def default_net(self):
+        # We have 1 additional input for the delimiter which is passed on a
+        # separate "control" channel
+        net = LSTMWithLinearLayer(
+            self.params.input_dim,
+            self.params.controller_size,
+            self.params.output_dim,
             self.params.device,
         )
         return net
