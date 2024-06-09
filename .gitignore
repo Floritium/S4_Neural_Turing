@@ -8,3 +8,6 @@ wandb
 *.cpython-312.pyc
 *.pt
 *.json
+*.ttf
+*.pyc
+.DS_Store
