@@ -1,228 +1,310 @@
-import json
-from tqdm import tqdm
-import numpy as np
-import os
+#!/usr/bin/env python
+# PYTHON_ARGCOMPLETE_OK
+"""Training for the Copy Task in Neural Turing Machines."""
+
 import argparse
+import json
+import logging
+import time
+import random
+import re
+import sys
+import os
+from arg_parser import init_arguments
 
+import attr
+import argcomplete
 import torch
-from torch import nn, optim
-
-from ntm import NTM
-from task_generator import CopyDataset, AssociativeDataset, SequentialMNIST
-from argparser import get_args
-
+import numpy as np
+from tqdm import tqdm
 import wandb
-import datetime
+import datetime 
 
-# ==== Arguments ====
-args = get_args()
+LOGGER = logging.getLogger(__name__)
 
-# ==== Set the device ====
-# Check if MPS (Apple Silicon) is available
-if args.device == True and torch.backends.mps.is_available() and torch.backends.mps.is_built():
-    device = torch.device('mps')
-# Check if CUDA (NVIDIA GPU) is available
-elif args.device == True and torch.cuda.is_available():
-    device = torch.device('cuda')
-# Fall back to CPU
-else:
-    device = torch.device('cpu')
 
-print('Using device:', device)
+from tasks.copytask import CopyTaskModelTraining, CopyTaskParams
+from tasks.repeatcopytask import RepeatCopyTaskModelTraining, RepeatCopyTaskParams
+from tasks.seq_mnist import SeqMNISTModelTraining, SeqMNISTParams
 
-# ==== seed ====
-def seed_everything(seed=1234):
+TASKS = {
+    'copy': (CopyTaskModelTraining, CopyTaskParams),
+    'repeat-copy': (RepeatCopyTaskModelTraining, RepeatCopyTaskParams),
+    'seq-mnist': (SeqMNISTModelTraining, SeqMNISTParams)
+}
+
+
+def get_ms():
+    """Returns the current time in miliseconds."""
+    return time.time() * 1000
+
+
+def init_seed(seed=None):
+    """Seed the RNGs for predicatability/reproduction purposes."""
+    if seed is None:
+        seed = int(get_ms() // 1000)
+
+    LOGGER.info("Using seed=%d", seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
-seed_everything(args.seed)
-
-# Step 1: Open the JSON file
-with open(args.task_json, 'r') as file:
-    # Step 2: Load the JSON data
-    task_params = json.load(file)
+    random.seed(seed)
 
 
 def progress_clean():
     """Clean the progress bar."""
     print("\r{}".format(" " * 80), end='\r')
 
-def save_checkpoint(net, task_params, args, step, losses, costs, seq_lengths, time):
+
+def progress_bar(batch_num, report_interval, last_loss):
+    """Prints the progress until the next report."""
+    progress = (((batch_num-1) % report_interval) + 1) / report_interval
+    fill = int(progress * 40)
+    print("\r[{}{}]: {} (Loss: {:.4f})".format(
+        "=" * fill, " " * (40 - fill), batch_num, last_loss), end='')
+
+
+def save_checkpoint(net, name, args, model_parms, batch_num, losses, costs, seq_lengths, time):
     progress_clean()
 
-    basename = "{}/{}-{}-{}-batch-{}-{}".format(args.checkpoint_path, task_params["model"], task_params["task"], args.seed, step, time)
+    basename = "{}/{}-{}-batch-{}-{}".format(args.checkpoint_path, name, args.seed, batch_num, time)
     model_fname = basename + ".pth"
-    print(f"Saving model checkpoint to: {model_fname}")
+    LOGGER.info("Saving model checkpoint to: '%s'", model_fname)
     torch.save(net.state_dict(), model_fname)
 
     # Save the training history
     train_fname = basename + ".json"
-    print(f"Saving model training history to {train_fname}")
+    LOGGER.info("Saving model training history to '%s'", train_fname)
     content = {
         "loss": losses,
         "cost": costs,
         "seq_lengths": seq_lengths,
-        "parameters_model": vars(args),
-        "parameters_task": task_params, # task_params is already a type dict
+        "parameters_model": vars(model_parms)
     }
     open(train_fname, 'wt').write(json.dumps(content))
 
-# ==== Create Dataset / task ====
-task_params = json.load(open(args.task_json)) # Load task parameters
 
-# Create dataset
-if task_params['task'] == 'copy':
-    dataset = CopyDataset(task_params)
-elif task_params['task'] == 'associative':
-    dataset = AssociativeDataset(task_params)
-elif task_params['task'] == 'seq_mnist':
-    dataset = SequentialMNIST(task_params, train=True)
-    print('Dataset size:', len(dataset))
-
-# ==== Create NTM ====
-if task_params['task'] == 'copy' or task_params['task'] == 'associative':
-    ntm = NTM(input_dim=task_params['seq_width'] + 2,
-              output_dim=task_params['seq_width'],
-              ctrl_dim=task_params['controller_size'],
-              memory_units=task_params['memory_units'],
-              memory_unit_size=task_params['memory_unit_size'],
-              num_heads=task_params['num_heads'], device=device).to(device)
-elif task_params['task'] == 'seq_mnist':
-    ntm = NTM(input_dim=task_params['seq_width'],
-            output_dim=task_params['output_dim'],
-            ctrl_dim=task_params['controller_size'],
-            memory_units=task_params['memory_units'],
-            memory_unit_size=task_params['memory_unit_size'],
-            num_heads=task_params['num_heads'], device=device).to(device)
-
-if args.resume_training:
-    file_name = args.saved_model
-
-    task_params = json.load(open(file_name))
-    task_params = task_params['parameters_task']
-
-    ntm = NTM(input_dim=task_params['seq_width'],
-            output_dim=task_params['output_dim'],
-            ctrl_dim=task_params['controller_size'],
-            memory_units=task_params['memory_units'],
-            memory_unit_size=task_params['memory_unit_size'],
-            num_heads=task_params['num_heads'], device=device).to(device)
-
-    # Add the new extension
-    base = os.path.splitext(file_name)[0]
-    new_file_name = base + ".pth"
-
-    ntm.load_state_dict(torch.load(new_file_name))
-    print("Model loaded from", new_file_name)
+def clip_grads(net):
+    """Gradient clipping to the range [10, 10]."""
+    parameters = list(filter(lambda p: p.grad is not None, net.parameters()))
+    for p in parameters:
+        p.grad.data.clamp_(-1, 1)
 
 
-# ==== Training Settings ====
-# Loss Function
-if task_params['task'] == 'seq_mnist':
-    criterion = nn.CrossEntropyLoss()
-else:
-    criterion = nn.BCELoss()
+def train_batch(net, criterion, optimizer, X, Y, args):
+    """Trains a single batch."""
 
-# optimizer = optim.RMSprop(ntm.parameters(),
-#                           lr=args.lr,
-#                           alpha=args.alpha,
-#                           momentum=args.momentum)
+    # Transfer to GPU
+    X = X.to(net.device)
+    Y = Y.to(net.device)
 
-optimizer = optim.Adam(ntm.parameters(), lr=args.lr,
-                       betas=(args.beta1, args.beta2))
-
-
-# === WandB ===
-
-# Initialize wandb and set the configuration
-wandb.init(project="nn-seminar", 
-
-    config={
-    "task_json": args.task_json,
-    "saved_model": args.saved_model,
-    "batch_size": args.batch_size,
-    "num_steps": args.num_steps,
-    "learning_rate": args.lr,
-    "momentum": args.momentum,
-    "alpha": args.alpha,
-    "beta1": args.beta1,
-    "beta2": args.beta2,
-    "seed": args.seed,
-    "device": args.device,
-    "eval_steps": args.eval_steps,
-    "checkpoint_path": args.checkpoint_path,
-    "checkpoint_interval": args.checkpoint_interval,
-    },    
-    mode="online" if args.log else "disabled"
-)
-
-
-# ==== Training ====
-
-# log time for chekpoints
-time = ''.join(str(datetime.datetime.now()).split())
-
-losses = []
-errors = []
-ntm.to(device)
-ntm.train()
-
-for step in tqdm(range(args.num_steps)):
+    # reset the input sequence and target sequence
+    if args.task == 'seq-mnist':
+        X = X.permute(1, 0, 2)
+        Y = Y.squeeze(1)
     
     optimizer.zero_grad()
-    ntm.reset()
-    
-    # Sample data
-    data = dataset[step]
-    inputs, target = data['input'], data['target']
-    inputs, target = inputs.to(device), target.to(device)
-    
-    # Tensor to store outputs
-    out = torch.zeros(target.size() if task_params['task'] != 'seq_mnist' else task_params['output_dim'])
-    
-    # Process the inputs through NTM for memorization
-    for i in range(inputs.size()[0]):
-        # Forward passing all sequences for read
-        # print(inputs[i].unsqueeze(0).shape, target.shape)
-        ntm(inputs[i].unsqueeze(0), memorize=True)
-    
+    inp_seq_len = X.size(0)
 
-    zero_inputs = torch.zeros(inputs.size()[1]).unsqueeze(0).to(device) # dummy inputs for reading memory
+    # get the size of the output sequence for copy and recall task
+    if args.task != 'seq-mnist':
+        outp_seq_len, batch_size, _ = Y.size()
 
-    # Get the outputs from memory without real inputs
-    if task_params['task'] == 'seq_mnist':
-        for i in range(inputs.size()[0]):
-            out = ntm(zero_inputs, memorize=False) # logits for cross entropy loss criterion
-    elif task_params['task'] == 'copy' or task_params['task'] == 'associative':
-        for i in range(target.size()[0]):
-            out[i] = torch.sigmoid(ntm(zero_inputs, memorize=False)) # sigmoid the logits
-    
-    # Compute loss, backprop, and optimize
-    out = out.to(device)
-    loss = criterion(out, target)
-    losses.append(loss.item())
+    # New sequence
+    batch_size = X.size(1)
+    net.init_sequence(batch_size)
+    # net.to_device()
+
+    # Feed the sequence + delimiter
+    for i in range(inp_seq_len):
+        y_out, _ , = net(X[i])
+
+    # Read the output (no input given)
+    if args.task != 'seq-mnist':
+        y_out = torch.zeros(Y.size())
+        for i in range(outp_seq_len):
+            out, _ = net()
+            y_out[i] = F.sigmoid(out)
+
+
+    loss = criterion(y_out, Y)
     loss.backward()
-    nn.utils.clip_grad_value_(ntm.parameters(), 0.5)
+    clip_grads(net)
     optimizer.step()
-    
-    # Calculate binary outputs
-    binary_output = out.clone()
-    binary_output = binary_output.cpu().detach().apply_(lambda x: 0 if x < 0.5 else 1)
-    
-    # Sequence prediction error is calculted in bits per sequence
-    error = torch.sum(torch.abs(binary_output.cpu() - target.cpu()))
-    errors.append(error.item())
-        
-    # Print Stats
-    if step % args.eval_steps == 0:
-        print('Step {} == Loss {:.3f} == Error {} bits per sequence'.format(step, np.mean(losses[-args.eval_steps:]), np.mean(errors[-args.eval_steps:])))
-        wandb.log({"Training/Loss": np.mean(losses[-args.eval_steps:]), "Training/Error": np.mean(errors[-args.eval_steps:])}, step=step)
 
-    # save checkpoint
-    if (args.checkpoint_interval != 0) and (step % args.checkpoint_interval == 0):
-        save_checkpoint(ntm, task_params, args, step, losses, errors, inputs.size()[0], time)
-    
-    
+    # Compute the cost of the output when binary values are expected
+    cost = torch.tensor(0)
+    if args.task == 'copy' or args.task == 'repeat-copy':
+        y_out_binarized = y_out.clone().data
+        y_out_binarized.apply_(lambda x: 0 if x < 0.5 else 1)
+
+        # The cost is the number of error bits per sequence
+        cost = torch.sum(torch.abs(y_out_binarized - Y.data))
+
+    return loss.item(), cost.item() / batch_size
+
+
+def evaluate(net, criterion, X, Y):
+    """Evaluate a single batch (without training)."""
+    inp_seq_len = X.size(0)
+    outp_seq_len, batch_size, _ = Y.size()
+
+    # New sequence
+    net.init_sequence(batch_size)
+
+    # Feed the sequence + delimiter
+    states = []
+    for i in range(inp_seq_len):
+        o, state = net(X[i])
+        states += [state]
+
+    # Read the output (no input given)
+    y_out = torch.zeros(Y.size())
+    for i in range(outp_seq_len):
+        y_out[i], state = net()
+        states += [state]
+
+    loss = criterion(y_out, Y)
+
+    y_out_binarized = y_out.clone().data
+    y_out_binarized.apply_(lambda x: 0 if x < 0.5 else 1)
+
+    # The cost is the number of error bits per sequence
+    cost = torch.sum(torch.abs(y_out_binarized - Y.data))
+
+    result = {
+        'loss': loss.data[0],
+        'cost': cost / batch_size,
+        'y_out': y_out,
+        'y_out_binarized': y_out_binarized,
+        'states': states
+    }
+
+    return result
+
+
+def train_model(model, args):
+    num_batches = model.params.num_batches
+    batch_size = model.params.batch_size
+
+    LOGGER.info("Training model for %d batches (batch_size=%d)...",
+                num_batches, batch_size)
+
+    losses = []
+    costs = []
+    seq_lengths = []
+    start_ms = get_ms()
+
+    time = ''.join(str(datetime.datetime.now()).split())
+
+    for batch_num, (x, y) in enumerate(tqdm(model.dataloader)):
+        loss, cost = train_batch(model.net, model.criterion, model.optimizer, x, y, args)
+        
+        losses += [loss]
+        costs += [cost]
+        seq_lengths += [y.size(0)]
+
+        # Update the progress bar
+        if not isinstance(model.dataloader, torch.utils.data.DataLoader):
+            progress_bar(batch_num, args.report_interval, loss)
+
+        # Report
+        if batch_num % args.report_interval == 0:
+            mean_loss = np.array(losses[-args.report_interval:]).mean()
+            mean_cost = np.array(costs[-args.report_interval:]).mean()
+            mean_time = int(((get_ms() - start_ms) / args.report_interval) / batch_size)
+            progress_clean()
+            LOGGER.info("Batch %d Loss: %.6f Cost: %.2f Time: %d ms/sequence",
+                        batch_num * x.size(0), mean_loss, mean_cost, mean_time)
+            start_ms = get_ms()
+
+        # Checkpoint
+        if (args.checkpoint_interval != 0) and (batch_num % args.checkpoint_interval == 0):
+            save_checkpoint(model.net, model.params.name, args, model.params, batch_num, losses, costs, seq_lengths, time)
+
+    LOGGER.info("Done training.")
+
+
+
+def update_model_params(params, update):
+    """Updates the default parameters using supplied user arguments."""
+
+    update_dict = {}
+    for p in update:
+        m = re.match("(.*)=(.*)", p)
+        if not m:
+            LOGGER.error("Unable to parse param update '%s'", p)
+            sys.exit(1)
+
+        k, v = m.groups()
+        update_dict[k] = v
+
+    try:
+        params = attr.evolve(params, **update_dict)
+    except TypeError as e:
+        LOGGER.error(e)
+        LOGGER.error("Valid parameters: %s", list(attr.asdict(params).keys()))
+        sys.exit(1)
+
+    return params
+
+def init_model(args):
+    LOGGER.info("Training for the **%s** task", args.task)
+
+    model_cls, params_cls = TASKS[args.task]
+    params = params_cls()
+    params = update_model_params(params, args.param)
+
+    LOGGER.info(params)
+
+    wandb.init(project="nn-seminar", 
+
+    config={
+    "task": params.name,
+    "controller_size": params.controller_size,
+    "controller_layers": params.controller_layers,
+    "num_heads": params.num_heads,
+    "sequence_width": params.sequence_width,
+    "input_dim": params.input_dim,
+    "output_dim": params.output_dim,
+    "memory_n": params.memory_n,
+    "memory_m": params.memory_m,
+    "device": params.device,
+    "batch_size": params.batch_size,
+    "lr": params.rmsprop_lr,
+    "momentum": params.rmsprop_momentum,
+    "alpha": params.rmsprop_alpha,
+    },    
+        mode="online" if args.log else "disabled"
+    )
+
+    model = model_cls(params=params)
+    return model
+
+
+def init_logging():
+    logging.basicConfig(format='[%(asctime)s] [%(levelname)s] [%(name)s]  %(message)s',
+                        level=logging.DEBUG)
+
+
+def main():
+    init_logging()
+
+
+
+    os.makedirs('checkpoints', exist_ok=True)
+
+    # Initialize arguments
+    args = init_arguments()
+
+    # Initialize random
+    init_seed(args.seed)
+
+    # Initialize the model
+    model = init_model(args)
+
+    LOGGER.info("Total number of parameters: %d", model.net.calculate_num_params())
+    train_model(model, args)
+
+
+if __name__ == '__main__':
+    main()
