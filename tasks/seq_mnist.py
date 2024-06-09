@@ -19,7 +19,7 @@ class SequentialMNIST(Dataset):
 
         # Define the transformation to be applied to the data
         self.transform = transforms.Compose([
-            transforms.Resize((self.resize_resolution, self.resize_resolution)),  # Resize to higher resolution, e.g., 56x56
+            transforms.Resize((self.resize_resolution, self.resize_resolution)),  # Resize to higher resolution or lower, e.g., 56x56
             transforms.ToTensor(),
             transforms.Normalize((0.5,), (0.5,)),  # Normalize the tensor to have pixel values in [-1, 1]
             transforms.Lambda(lambda x: x.view(1, self.resize_resolution * self.resize_resolution).t())  # Adjust view for new resolution
@@ -66,7 +66,7 @@ class SeqMNISTParams(object):
     output_dim = attrib(default=10)
     memory_n = attrib(default=128)
     memory_m = attrib(default=5)
-    num_batches = attrib(default=250000)
+    num_batches = attrib(default=0)
     batch_size = attrib(default=64)
     rmsprop_lr = attrib(default=1e-4)
     rmsprop_momentum = attrib(default=0.9)

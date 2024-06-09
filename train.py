@@ -65,10 +65,10 @@ def progress_bar(batch_num, report_interval, last_loss):
         "=" * fill, " " * (40 - fill), batch_num, last_loss), end='')
 
 
-def save_checkpoint(net, name, args, model_parms, batch_num, losses, costs, seq_lengths, time):
+def save_checkpoint(net, name, args, model_parms, batch_num, losses, costs, seq_lengths, time, epoch):
     progress_clean()
 
-    basename = "{}/{}-{}-{}-batch-{}-{}".format(args.checkpoint_path, args.task, name, args.seed, batch_num, time)
+    basename = "{}/{}-{}-seed-{}-epoch-{}-batch-{}-{}".format(args.checkpoint_path, args.task, name, args.seed, epoch, batch_num, time)
     model_fname = basename + ".pth"
     LOGGER.info("Saving model checkpoint to: '%s'", model_fname)
     torch.save(net.state_dict(), model_fname)
@@ -117,7 +117,7 @@ def train_batch_ntm(net, criterion, optimizer, X, Y, args):
 
     # Feed the sequence + delimiter
     for i in range(inp_seq_len):
-        y_out, _ , = net(X[i])
+        y_out, _ = net(X[i])
 
     # Read the output (no input given)
     if args.task != 'seq-mnist-ntm':
@@ -195,7 +195,7 @@ def train_batch_lstm(net, criterion, optimizer, X, Y, args):
     Y = Y.squeeze(1)
 
     # Forward
-    Y_pred = net(X).squeeze(0)
+    Y_pred = net(X)
 
     # Compute the loss
     loss = criterion(Y_pred, Y)
@@ -227,34 +227,35 @@ def train_model(model, args):
 
     time = ''.join(str(datetime.datetime.now().strftime("%Y-%m-%d %H-%M-%S")).split())
 
-    for batch_num, (x, y) in enumerate(tqdm(model.dataloader)):
-        if args.task == 'seq-mnist-ntm' or args.task == 'copy' or args.task == 'repeat-copy':
-            loss, cost = train_batch_ntm(model.net, model.criterion, model.optimizer, x, y, args)
-        elif args.task == 'seq-mnist-lstm':
-            loss = train_batch_lstm(model.net, model.criterion, model.optimizer, x, y, args)
-            cost = loss
-        
-        losses += [loss]
-        costs += [cost]
-        seq_lengths += [y.size(0)]
+    for epoch in range(args.epochs):
+        for batch_num, (x, y) in enumerate(tqdm(model.dataloader)):
+            if args.task == 'seq-mnist-ntm' or args.task == 'copy' or args.task == 'repeat-copy':
+                loss, cost = train_batch_ntm(model.net, model.criterion, model.optimizer, x, y, args)
+            elif args.task == 'seq-mnist-lstm':
+                loss = train_batch_lstm(model.net, model.criterion, model.optimizer, x, y, args)
+                cost = loss
+            
+            losses += [loss]
+            costs += [cost]
+            seq_lengths += [y.size(0)]
 
-        # Update the progress bar
-        if not isinstance(model.dataloader, torch.utils.data.DataLoader):
-            progress_bar(batch_num, args.report_interval, loss)
+            # Update the progress bar
+            if not isinstance(model.dataloader, torch.utils.data.DataLoader):
+                progress_bar(batch_num, args.report_interval, loss)
 
-        # Report
-        if batch_num % args.report_interval == 0:
-            mean_loss = np.array(losses[-args.report_interval:]).mean()
-            mean_cost = np.array(costs[-args.report_interval:]).mean()
-            mean_time = int(((get_ms() - start_ms) / args.report_interval) / batch_size)
-            progress_clean()
-            LOGGER.info("Batch %d Loss: %.6f Cost: %.2f Time: %d ms/sequence",
-                        batch_num * x.size(0), mean_loss, mean_cost, mean_time)
-            start_ms = get_ms()
+            # Report
+            if batch_num % args.report_interval == 0:
+                mean_loss = np.array(losses[-args.report_interval:]).mean()
+                mean_cost = np.array(costs[-args.report_interval:]).mean()
+                mean_time = int(((get_ms() - start_ms) / args.report_interval) / batch_size)
+                progress_clean()
+                LOGGER.info("Batch %d Loss: %.6f Cost: %.2f Time: %d ms/sequence",
+                            batch_num * x.size(0), mean_loss, mean_cost, mean_time)
+                start_ms = get_ms()
 
-        # Checkpoint
-        if (args.checkpoint_interval != 0) and (batch_num % args.checkpoint_interval == 0):
-            save_checkpoint(model.net, model.params.name, args, model.params, batch_num, losses, costs, seq_lengths, time)
+            # Checkpoint
+            if (args.checkpoint_interval != 0) and (batch_num % args.checkpoint_interval == 0):
+                save_checkpoint(model.net, model.params.name, args, model.params, batch_num, losses, costs, seq_lengths, time, epoch)
 
     LOGGER.info("Done training.")
 

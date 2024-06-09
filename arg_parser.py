@@ -15,6 +15,7 @@ def init_arguments():
     parser.add_argument('--report_interval', type=int, default=10,
                         help="Reporting interval")
     parser.add_argument('--log', action='store_true', help="Enable logging")
+    parser.add_argument('--epochs', type=int, default=1, help='Number of epochs. (default: 1)')
 
     argcomplete.autocomplete(parser)
 

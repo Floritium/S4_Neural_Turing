@@ -13,7 +13,7 @@ class LSTMWithLinearLayer(nn.Module):
     def forward(self, x_t: torch.Tensor):
         _, (h_t, _) = self._lstm(x_t)
 
-        return self._linear(h_t)
+        return self._linear(h_t).squeeze(0)
 
     def calculate_num_params(self):
         """Returns the total number of parameters."""
