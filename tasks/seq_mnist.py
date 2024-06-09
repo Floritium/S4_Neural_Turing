@@ -60,7 +60,7 @@ class SeqMNISTParams(object):
     controller_size = attrib(default=100)
     controller_layers = attrib(default=1)
     num_heads = attrib(default=1)
-    sequence_width = attrib(default=14)
+    resize_resolution = attrib(default=14)
     input_dim = attrib(default=1)
     output_dim = attrib(default=10)
     memory_n = attrib(default=128)
@@ -100,7 +100,7 @@ class SeqMNISTModelTraining(object):
     @dataloader.default
     def default_dataloader(self):
         dataloader = torch.utils.data.DataLoader(
-            SequentialMNIST({"resize_resolution": self.params.sequence_width}),
+            SequentialMNIST({"resize_resolution": self.params.resize_resolution}),
             batch_size=self.params.batch_size,
             shuffle=False,
         )
