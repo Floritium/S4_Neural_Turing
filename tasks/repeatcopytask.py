@@ -67,7 +67,7 @@ def dataloader(num_batches,
         outp[:seq_len * reps, :, :seq_width] = seq.clone().repeat(reps, 1, 1)
         outp[seq_len * reps, :, seq_width] = 1.0 # End marker
 
-        yield batch_num+1, inp.float(), outp.float()
+        yield inp.float(), outp.float()
 
 
 @attrs
@@ -88,6 +88,7 @@ class RepeatCopyTaskParams(object):
     rmsprop_lr = attrib(default=1e-4)
     rmsprop_momentum = attrib(default=0.9)
     rmsprop_alpha = attrib(default=0.95)
+    device=attrib("cpu")
 
 
 @attrs

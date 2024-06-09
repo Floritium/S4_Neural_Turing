@@ -123,8 +123,7 @@ def train_batch(net, criterion, optimizer, X, Y, args):
         y_out = torch.zeros(Y.size())
         for i in range(outp_seq_len):
             out, _ = net()
-            y_out[i] = F.sigmoid(out)
-
+            y_out[i] = torch.sigmoid(out)
 
     loss = criterion(y_out, Y)
     loss.backward()
@@ -185,9 +184,10 @@ def evaluate(net, criterion, X, Y):
 def train_model(model, args):
     num_batches = model.params.num_batches
     batch_size = model.params.batch_size
+    num_samples = num_batches * batch_size
 
-    LOGGER.info("Training model for %d batches (batch_size=%d)...",
-                num_batches, batch_size)
+    LOGGER.info("Training model for %d batches (batch_size=%d - num_samples=%d)...",
+                num_batches, batch_size, num_samples)
 
     losses = []
     costs = []
@@ -235,8 +235,10 @@ def update_model_params(params, update):
             LOGGER.error("Unable to parse param update '%s'", p)
             sys.exit(1)
 
+
         k, v = m.groups()
-        update_dict[k] = v
+        print(getattr(params, k))
+        update_dict[k] = int(v) if isinstance(getattr(params, k), int) else v
 
     try:
         params = attr.evolve(params, **update_dict)
@@ -257,23 +259,7 @@ def init_model(args):
     LOGGER.info(params)
 
     wandb.init(project="nn-seminar", 
-
-    config={
-    "task": params.name,
-    "controller_size": params.controller_size,
-    "controller_layers": params.controller_layers,
-    "num_heads": params.num_heads,
-    "sequence_width": params.sequence_width,
-    "input_dim": params.input_dim,
-    "output_dim": params.output_dim,
-    "memory_n": params.memory_n,
-    "memory_m": params.memory_m,
-    "device": params.device,
-    "batch_size": params.batch_size,
-    "lr": params.rmsprop_lr,
-    "momentum": params.rmsprop_momentum,
-    "alpha": params.rmsprop_alpha,
-    },    
+        config=vars(params),
         mode="online" if args.log else "disabled"
     )
 

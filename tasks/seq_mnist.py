@@ -10,7 +10,7 @@ from ntm.aio import EncapsulatedNTM
 from torch.utils.data import Dataset
 from torchvision import transforms
 import torchvision
-
+from torch.utils.data import DataLoader
 
 class SequentialMNIST(Dataset):
     def __init__(self, task_params, train=True):
@@ -42,6 +42,16 @@ class SequentialMNIST(Dataset):
         input_seq = self.dataset[idx][0]
         target_label = self.dataset[idx][1]
         return input_seq, torch.tensor([target_label])
+
+# def dataloader(num_batches,
+#                batch_size,
+#                max_len,
+#                dataset):
+#     """Generator of random sequences for the copy task."""
+#     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+#     for batch_num in range(dataloader):
+
+
 
 
 @attrs
@@ -94,6 +104,7 @@ class SeqMNISTModelTraining(object):
             batch_size=self.params.batch_size,
             shuffle=False,
         )
+        self.params.num_batches = len(dataloader)
         return dataloader
 
     @criterion.default

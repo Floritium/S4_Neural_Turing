@@ -45,7 +45,7 @@ def dataloader(num_batches,
         inp[seq_len, :, seq_width] = 1.0 # delimiter in our control channel
         outp = seq.clone()
 
-        yield batch_num+1, inp.float(), outp.float()
+        yield inp.float(), outp.float()
 
 
 @attrs
@@ -55,8 +55,8 @@ class CopyTaskParams(object):
     controller_layers = attrib(default=1)
     num_heads = attrib(default=1)
     sequence_width = attrib(default=8)
-    sequence_min_len = attrib(default=799)
-    sequence_max_len = attrib(default=800)
+    sequence_min_len = attrib(default=1)
+    sequence_max_len = attrib(default=20)
     memory_n = attrib(default=128)
     memory_m = attrib(default=20)
     num_batches = attrib(default=50000)
@@ -64,7 +64,7 @@ class CopyTaskParams(object):
     rmsprop_lr = attrib(default=1e-4)
     rmsprop_momentum = attrib(default=0.9)
     rmsprop_alpha = attrib(default=0.95)
-    device = attrib(default=torch.device("mps"))
+    device=attrib("cpu")
 
 
 #
