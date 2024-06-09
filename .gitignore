@@ -1,6 +1,7 @@
 data
 ipynb_checkpoints
 checkpoints
+checkpoints_old
 *.pyc
 *.wandb
 wandb
