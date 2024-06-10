@@ -16,6 +16,7 @@ def init_arguments():
                         help="Reporting interval")
     parser.add_argument('--log', action='store_true', help="Enable logging")
     parser.add_argument('--epochs', type=int, default=1, help='Number of epochs. (default: 1)')
+    parser.add_argument('--validation_interval', type=int, default=0, help='Validate the model on the validation. (default: 1)')
 
     argcomplete.autocomplete(parser)
 

@@ -224,11 +224,15 @@ def train_model(model, args):
     costs = []
     seq_lengths = []
     start_ms = get_ms()
-
     time = ''.join(str(datetime.datetime.now().strftime("%Y-%m-%d %H-%M-%S")).split())
 
-    for epoch in range(args.epochs):
-        for batch_num, (x, y) in enumerate(tqdm(model.dataloader)):
+    # get the dataloaders
+    train_loader, val_loader = model.dataloader
+
+    model.net.to_device() # move the model to the device (must be optimized!)
+    for epoch in range(1, args.epochs+1):
+        model.net.train() # set the model to training mode
+        for batch_num, (x, y) in enumerate(tqdm(train_loader)):
             if args.task == 'seq-mnist-ntm' or args.task == 'copy' or args.task == 'repeat-copy':
                 loss, cost = train_batch_ntm(model.net, model.criterion, model.optimizer, x, y, args)
             elif args.task == 'seq-mnist-lstm':
@@ -256,6 +260,13 @@ def train_model(model, args):
             # Checkpoint
             if (args.checkpoint_interval != 0) and (batch_num % args.checkpoint_interval == 0):
                 save_checkpoint(model.net, model.params.name, args, model.params, batch_num, losses, costs, seq_lengths, time, epoch)
+        
+        if  (epoch % args.validate) == 0 and args.validate > 0:
+            model.net.eval() # set the model to evaluation mode
+            print("Validating the model...")
+            for x, y in tqdm(val_loader):
+                result = evaluate(model.net, model.criterion, x, y)
+                LOGGER.info("Validation Loss: %.6f Cost: %.2f", result['loss'], result['cost'])
 
     LOGGER.info("Done training.")
 
