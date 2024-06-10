@@ -18,3 +18,11 @@ Ideas: https://app.diagrams.net/#G1cHGAA4ybM5Cu00LdYxlF6Wx5bUun8e5k#%7B%22pageId
   - [ ] LSTM on the same tasks (maybe use reference chart from the S4 paper).
     - [ ] Implement the copy task.
     - [ ] Implement the sequential tasks.
+
+## Training
+Train the model using the following tasks:
+```bash
+python train.py --task seq-mnist-ntm --checkpoint_interval 20 --report_interval 10 -pbatch_size=64 --epochs=1 --validation_interval=0 --seed 1000
+...
+python train.py --task seq-mnist-lstm --checkpoint_interval 20 --report_interval 10 -pbatch_size=64 --epochs=100 --validation_interval=0 --seed 1000
+```
