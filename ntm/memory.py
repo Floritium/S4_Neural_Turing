@@ -32,11 +32,7 @@ class NTMMemory(nn.Module):
 
         # The memory bias allows the heads to learn how to initially address
         # memory locations by content
-        self.register_buffer('mem_bias', torch.Tensor(N, M).to(device))
-
-        # Initialize memory bias
-        stdev = 1 / (np.sqrt(N + M))
-        nn.init.uniform_(self.mem_bias, -stdev, stdev)
+        self.register_buffer('mem_bias', torch.Tensor().new_full((N, M), 1e-6).to(device)) # initlized with zero
 
     def reset(self, batch_size):
         """Initialize memory from bias, for start-of-sequence."""
