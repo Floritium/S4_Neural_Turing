@@ -72,6 +72,7 @@ class SeqMNISTParams(object):
     rmsprop_momentum = attrib(default=0.9)
     rmsprop_alpha = attrib(default=0.95)
     device = attrib(default="cpu")
+    fraction = attrib(default=0.5)
 
 
 @attrs
@@ -100,13 +101,33 @@ class SeqMNISTModelTraining_ntm(object):
 
     @dataloader.default
     def default_dataloader(self):
-        dataloader = torch.utils.data.DataLoader(
-            SequentialMNIST({"resize_resolution": self.params.resize_resolution}),
+
+        # init the dataset
+        dataset = SequentialMNIST({"resize_resolution": self.params.resize_resolution})
+        
+        # split the dataset into train and val
+        size = len(dataset) * self.params.fraction
+        train_indices = np.random.choice(len(dataset), int(size), replace=False)
+        val_indices = np.setdiff1d(np.arange(len(dataset)), train_indices)
+        train_ds = torch.utils.data.Subset(dataset, train_indices)
+        val_ds = torch.utils.data.Subset(dataset, val_indices)
+        
+        # create the train dataloader
+        train_dataloader = torch.utils.data.DataLoader(
+            train_ds,
             batch_size=self.params.batch_size,
-            shuffle=False,
+            shuffle=True,
         )
-        self.params.num_batches = len(dataloader)
-        return dataloader
+
+        # create the validation dataloader
+        val_dataloader = torch.utils.data.DataLoader(
+            val_ds,
+            batch_size=self.params.batch_size,
+            shuffle=False,  # No need to shuffle for validation
+        )
+
+        self.params.num_batches = len(train_dataloader)
+        return train_dataloader, val_dataloader
 
     @criterion.default
     def default_criterion(self):
@@ -143,13 +164,32 @@ class SeqMNISTModelTraining_lstm(object):
 
     @dataloader.default
     def default_dataloader(self):
-        dataloader = torch.utils.data.DataLoader(
-            SequentialMNIST({"resize_resolution": self.params.resize_resolution}),
+        # init the dataset
+        dataset = SequentialMNIST({"resize_resolution": self.params.resize_resolution})
+        
+        # split the dataset into train and val
+        size = len(dataset) * self.params.fraction
+        train_indices = np.random.choice(len(dataset), int(size), replace=False)
+        val_indices = np.setdiff1d(np.arange(len(dataset)), train_indices)
+        train_ds = torch.utils.data.Subset(dataset, train_indices)
+        val_ds = torch.utils.data.Subset(dataset, val_indices)
+        
+        # create the train dataloader
+        train_dataloader = torch.utils.data.DataLoader(
+            train_ds,
             batch_size=self.params.batch_size,
-            shuffle=False,
+            shuffle=True,
         )
-        self.params.num_batches = len(dataloader)
-        return dataloader
+
+        # create the validation dataloader
+        val_dataloader = torch.utils.data.DataLoader(
+            val_ds,
+            batch_size=self.params.batch_size,
+            shuffle=False,  # No need to shuffle for validation
+        )
+
+        self.params.num_batches = len(train_dataloader)
+        return train_dataloader, val_dataloader
 
     @criterion.default
     def default_criterion(self):

@@ -113,7 +113,7 @@ class RepeatCopyTaskModelTraining(object):
         return dataloader(self.params.num_batches, self.params.batch_size,
                           self.params.sequence_width,
                           self.params.sequence_min_len, self.params.sequence_max_len,
-                          self.params.repeat_min, self.params.repeat_max)
+                          self.params.repeat_min, self.params.repeat_max), None
 
     @criterion.default
     def default_criterion(self):

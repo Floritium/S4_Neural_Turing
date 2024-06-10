@@ -104,7 +104,7 @@ class CopyTaskModelTraining(object):
     def default_dataloader(self):
         return dataloader(self.params.num_batches, self.params.batch_size,
                           self.params.sequence_width,
-                          self.params.sequence_min_len, self.params.sequence_max_len)
+                          self.params.sequence_min_len, self.params.sequence_max_len), None
 
     @criterion.default
     def default_criterion(self):
