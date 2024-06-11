@@ -25,14 +25,14 @@ LOGGER = logging.getLogger(__name__)
 
 from tasks.copytask import CopyTaskModelTraining, CopyTaskParams
 from tasks.repeatcopytask import RepeatCopyTaskModelTraining, RepeatCopyTaskParams
-from tasks.seq_mnist import SeqMNISTModelTraining_ntm, SeqMNISTModelTraining_lstm, SeqMNISTParams
+from tasks.seq_mnist import SeqMNISTModelTraining_ntm, SeqMNISTModelTraining_lstm, SeqMNISTParams_ntm, SeqMNISTModelTraining_ntm_cache, SeqMNISTParams_ntm_cache
 
 TASKS = {
     'copy': (CopyTaskModelTraining, CopyTaskParams),
     'repeat-copy': (RepeatCopyTaskModelTraining, RepeatCopyTaskParams),
-    'seq-mnist-ntm': (SeqMNISTModelTraining_ntm, SeqMNISTParams),
-    'seq-mnist-lstm': (SeqMNISTModelTraining_lstm, SeqMNISTParams)
-
+    'seq-mnist-ntm-cache': (SeqMNISTModelTraining_ntm_cache, SeqMNISTParams_ntm_cache),
+    'seq-mnist-ntm': (SeqMNISTModelTraining_ntm, SeqMNISTParams_ntm), # its basically also cache, as use_memory can be set between [0,1]
+    'seq-mnist-lstm': (SeqMNISTModelTraining_lstm, SeqMNISTParams_ntm)
 }
 
 
@@ -65,10 +65,10 @@ def progress_bar(batch_num, report_interval, last_loss):
         "=" * fill, " " * (40 - fill), batch_num, last_loss), end='')
 
 
-def save_checkpoint(net, name, args, model_parms, batch_num, losses, costs, seq_lengths, time, epoch):
+def save_checkpoint(net, args, model_parms, batch_num, losses, costs, seq_lengths, time, epoch):
     progress_clean()
 
-    basename = "{}/{}-{}-seed-{}-epoch-{}-batch-{}-{}".format(args.checkpoint_path, args.task, name, args.seed, epoch, batch_num, time)
+    basename = "{}/{}--seed-{}-epoch-{}-batch-{}-{}".format(args.checkpoint_path, args.task, args.seed, epoch, batch_num, time)
     model_fname = basename + ".pth"
     LOGGER.info("Saving model checkpoint to: '%s'", model_fname)
     torch.save(net.state_dict(), model_fname)
@@ -143,6 +143,39 @@ def train_batch_ntm(net, criterion, optimizer, X, Y, args):
     return loss.item(), cost.item() / batch_size
 
 
+
+def train_batch_ntm_cache(net, criterion, optimizer, X, Y, args):
+    """Trains a single batch."""
+
+
+    # Transfer to GPU
+    X = X.to(net.device)
+    Y = Y.to(net.device)
+
+    # reset the input sequence and target sequence
+    if args.task == 'seq-mnist-ntm-cache':
+        X = X.permute(1, 0, 2)
+        Y = Y.squeeze(1)
+    
+    batch_size = X.size(1)
+    net.init_sequence(batch_size)
+    
+    optimizer.zero_grad()
+
+    # Feed the sequence + delimiter
+    y_out, _ = net(X)
+
+    loss = criterion(y_out, Y)
+    loss.backward()
+    clip_grads(net)
+    optimizer.step()
+
+    # Compute the cost of the output when binary values are expected
+    cost = torch.tensor(0)
+ 
+    return loss.item()
+
+
 def evaluate(net, criterion, X, Y):
     """Evaluate a single batch (without training)."""
     inp_seq_len = X.size(0)
@@ -211,15 +244,14 @@ def train_batch_lstm(net, criterion, optimizer, X, Y, args):
 
 
 def train_model(model, args):
+    # Get the number of batches
     num_batches = model.params.num_batches
     batch_size = model.params.batch_size
     num_samples = num_batches * batch_size
-
     LOGGER.info("Training model for %d batches (batch_size=%d - num_samples=%d)...",
                 num_batches, batch_size, num_samples)
 
-    model.net.to_device()
-
+    # Initialize the progress bar
     losses = []
     costs = []
     seq_lengths = []
@@ -235,6 +267,9 @@ def train_model(model, args):
         for batch_num, (x, y) in enumerate(tqdm(train_loader)):
             if args.task == 'seq-mnist-ntm' or args.task == 'copy' or args.task == 'repeat-copy':
                 loss, cost = train_batch_ntm(model.net, model.criterion, model.optimizer, x, y, args)
+            if args.task == 'seq-mnist-ntm-cache':
+                loss = train_batch_ntm_cache(model.net, model.criterion, model.optimizer, x, y, args)
+                cost = loss
             elif args.task == 'seq-mnist-lstm':
                 loss = train_batch_lstm(model.net, model.criterion, model.optimizer, x, y, args)
                 cost = loss
@@ -259,7 +294,7 @@ def train_model(model, args):
 
             # Checkpoint
             if (args.checkpoint_interval != 0) and (batch_num % args.checkpoint_interval == 0):
-                save_checkpoint(model.net, model.params.name, args, model.params, batch_num, losses, costs, seq_lengths, time, epoch)
+                save_checkpoint(model.net, args, model.params, batch_num, losses, costs, seq_lengths, time, epoch)
         
         if  (epoch % args.validate) == 0 and args.validate > 0:
             model.net.eval() # set the model to evaluation mode
@@ -285,7 +320,12 @@ def update_model_params(params, update):
 
         k, v = m.groups()
         print(getattr(params, k))
-        update_dict[k] = int(v) if isinstance(getattr(params, k), int) else v
+        if k == 'use_memory':
+            update_dict[k] = float(v)
+        elif k == "batch_size":
+            update_dict[k] = int(v)
+        else:
+            pass
 
     try:
         params = attr.evolve(params, **update_dict)

@@ -56,8 +56,9 @@ class SequentialMNIST(Dataset):
 
 
 @attrs
-class SeqMNISTParams(object):
-    name = attrib(default="seq_mnist-task")
+class SeqMNISTParams_ntm(object):
+    name = attrib(default="seq-mnist-ntm")
+    model_name = "ntm"
     controller_size = attrib(default=100)
     controller_layers = attrib(default=1)
     num_heads = attrib(default=1)
@@ -65,7 +66,7 @@ class SeqMNISTParams(object):
     input_dim = attrib(default=1)
     output_dim = attrib(default=10)
     memory_n = attrib(default=128)
-    memory_m = attrib(default=5)
+    memory_m = attrib(default=20)
     num_batches = attrib(default=0)
     batch_size = attrib(default=64)
     rmsprop_lr = attrib(default=1e-4)
@@ -73,11 +74,35 @@ class SeqMNISTParams(object):
     rmsprop_alpha = attrib(default=0.95)
     device = attrib(default="cpu")
     fraction = attrib(default=0.5)
+    use_memory = attrib(default=1.0)
 
+@attrs
+class SeqMNISTParams_ntm_cache(object):
+    # seq_len = num_head for NTM variant, where we dont interact with the memory each time step.
+    name = attrib(default="seq-mnist-ntm-cache")
+    model_name = "ntm_cache"
+    controller_size = attrib(default=100)
+    controller_layers = attrib(default=1)
+
+    # both must be the aligned, i.e. 8*8 sequence len = num_heads
+    resize_resolution = attrib(default=8)
+    num_heads = attrib(default=0)
+
+    input_dim = attrib(default=1)
+    output_dim = attrib(default=10)
+    memory_n = attrib(default=128)
+    memory_m = attrib(default=20)
+    num_batches = attrib(default=0)
+    batch_size = attrib(default=32)
+    rmsprop_lr = attrib(default=1e-4)
+    rmsprop_momentum = attrib(default=0.9)
+    rmsprop_alpha = attrib(default=0.95)
+    device = attrib(default="cpu")
+    fraction = attrib(default=0.5)
 
 @attrs
 class SeqMNISTModelTraining_ntm(object):
-    params = attrib(default=Factory(SeqMNISTParams))
+    params = attrib(default=Factory(SeqMNISTParams_ntm))
     net = attrib()
     dataloader = attrib()
     criterion = attrib()
@@ -88,14 +113,16 @@ class SeqMNISTModelTraining_ntm(object):
         # We have 1 additional input for the delimiter which is passed on a
         # separate "control" channel
         net = EncapsulatedNTM(
-            self.params.input_dim,
-            self.params.output_dim,
-            self.params.controller_size,
-            self.params.controller_layers,
-            self.params.num_heads,
-            self.params.memory_n,
-            self.params.memory_m,
-            self.params.device,
+            num_inputs=self.params.input_dim,
+            num_outputs=self.params.output_dim,
+            controller_size=self.params.controller_size,
+            controller_layers=self.params.controller_layers,
+            num_heads=self.params.num_heads,
+            N=self.params.memory_n,
+            M=self.params.memory_m,
+            device=self.params.device,
+            model_architecture=self.params.model_name,
+            use_memory=self.params.use_memory,
         )
         return net
 
@@ -143,8 +170,79 @@ class SeqMNISTModelTraining_ntm(object):
         )
 
 @attrs
+class SeqMNISTModelTraining_ntm_cache(object):
+    params = attrib(default=Factory(SeqMNISTParams_ntm_cache))
+    net = attrib()
+    dataloader = attrib()
+    criterion = attrib()
+    optimizer = attrib()
+
+    @net.default
+    def default_net(self):
+        # We have 1 additional input for the delimiter which is passed on a
+        # separate "control" channel
+        self.params.num_heads = self.params.resize_resolution**2
+        net = EncapsulatedNTM(
+            self.params.input_dim,
+            self.params.output_dim,
+            self.params.controller_size,
+            self.params.controller_layers,
+            self.params.num_heads,
+            self.params.memory_n,
+            self.params.memory_m,
+            self.params.device,
+            self.params.model_name,
+            self.params.resize_resolution**2,
+        )
+        return net
+
+    @dataloader.default
+    def default_dataloader(self):
+
+        # init the dataset
+        dataset = SequentialMNIST({"resize_resolution": self.params.resize_resolution})
+        
+        # split the dataset into train and val
+        size = len(dataset) * self.params.fraction
+        train_indices = np.random.choice(len(dataset), int(size), replace=False)
+        val_indices = np.setdiff1d(np.arange(len(dataset)), train_indices)
+        train_ds = torch.utils.data.Subset(dataset, train_indices)
+        val_ds = torch.utils.data.Subset(dataset, val_indices)
+        
+        # create the train dataloader
+        train_dataloader = torch.utils.data.DataLoader(
+            train_ds,
+            batch_size=self.params.batch_size,
+            shuffle=True,
+        )
+
+        # create the validation dataloader
+        val_dataloader = torch.utils.data.DataLoader(
+            val_ds,
+            batch_size=self.params.batch_size,
+            shuffle=False,  # No need to shuffle for validation
+        )
+
+        self.params.num_batches = len(train_dataloader)
+        return train_dataloader, val_dataloader
+
+    @criterion.default
+    def default_criterion(self):
+        return nn.CrossEntropyLoss()
+
+    @optimizer.default
+    def default_optimizer(self):
+        return optim.RMSprop(
+            self.net.parameters(),
+            momentum=self.params.rmsprop_momentum,
+            alpha=self.params.rmsprop_alpha,
+            lr=self.params.rmsprop_lr,
+        )
+
+
+@attrs
 class SeqMNISTModelTraining_lstm(object):
-    params = attrib(default=Factory(SeqMNISTParams))
+    params = attrib(default=Factory(SeqMNISTParams_ntm))
     net = attrib()
     dataloader = attrib()
     criterion = attrib()

@@ -44,7 +44,8 @@ class LSTMController(nn.Module):
         return self.num_inputs, self.num_outputs
 
     def forward(self, x, prev_state):
-        x = x.unsqueeze(0)
+        if x.dim() == 2: # use this for sequence length = 1, where each item in the sequence is a single time step and gets fed in
+            x = x.unsqueeze(0)
         outp, state = self.lstm(x, prev_state)
         return outp.squeeze(0), state
 

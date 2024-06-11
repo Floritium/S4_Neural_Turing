@@ -2,11 +2,11 @@
 import torch
 from torch import nn
 import torch.nn.functional as F
-import random
 
-class NTM(nn.Module):
+
+class NTM_cache(nn.Module):
     """A Neural Turing Machine."""
-    def __init__(self, num_inputs, num_outputs, controller, memory, heads, use_memory, device):
+    def __init__(self, num_inputs, num_outputs, controller, memory, heads, seq_len, device):
         """Initialize the NTM.
 
         :param num_inputs: External input size.
@@ -19,7 +19,7 @@ class NTM(nn.Module):
               write heads independently, also, the order by which the heads are
               called in controlled by the user (order in list)
         """
-        super(NTM, self).__init__()
+        super(NTM_cache, self).__init__()
 
         # Save arguments
         self.num_inputs = num_inputs
@@ -27,7 +27,7 @@ class NTM(nn.Module):
         self.controller = controller
         self.memory = memory
         self.heads = heads
-        self.use_memory = use_memory
+        self.seq_len = seq_len
 
         self.N, self.M = memory.size()
         _, self.controller_size = controller.size()
@@ -71,28 +71,23 @@ class NTM(nn.Module):
         # Unpack the previous state
         prev_reads, prev_controller_state, prev_heads_states = prev_state
 
+        prev_reads = torch.cat(prev_reads, dim=1).view(self.num_read_heads, -1, self.M) # (num_read_heads x B x M)
         # Use the controller to get an embeddings
-        inp = torch.cat([x] + prev_reads, dim=1)
+        inp = torch.cat([x, prev_reads], dim=2) # (batch_size x (num_inputs + num_read_heads*M))
         controller_outp, controller_state = self.controller(inp, prev_controller_state)
-        interact_with_memory = random.random() < self.use_memory
 
         # Read/Write from the list of heads
-        if interact_with_memory:
-            reads = []
-            heads_states = []
-            for head, prev_head_state in zip(self.heads, prev_heads_states):
-                if head.is_read_head():
-                    # input the hidden cell state of the controller
-                    r, head_state = head(controller_state[-1].squeeze(0), prev_head_state) # output r=(batch_size x M), head_state=(batch_size x N)
-                    reads += [r]
-                else:
-                    # input the hidden cell state of the controller
-                    head_state = head(controller_state[-1].squeeze(0), prev_head_state)
-                heads_states += [head_state]
-        else:
-            # hold in cache for the next iteration
-            reads = prev_reads
-            heads_states = prev_heads_states
+        reads = []
+        heads_states = []
+        for head, prev_head_state in zip(self.heads, prev_heads_states):
+            if head.is_read_head():
+                # input the hidden cell state of the controller
+                r, head_state = head(controller_state[-1].squeeze(0), prev_head_state) # output r=(batch_size x M), head_state=(batch_size x N)
+                reads += [r]
+            else:
+                # input the hidden cell state of the controller
+                head_state = head(controller_state[-1].squeeze(0), prev_head_state)
+            heads_states += [head_state]
 
         # Generate Output
         inp2 = torch.cat([controller_state[-1].squeeze(0)] + reads, dim=1)
@@ -102,3 +97,6 @@ class NTM(nn.Module):
         state = (reads, controller_state, heads_states)
 
         return o, state
+
+
+        

@@ -2,6 +2,7 @@
 import torch
 from torch import nn
 from .ntm import NTM
+from .ntm_cache import NTM_cache
 from .controller import LSTMController
 from .head import NTMReadHead, NTMWriteHead
 from .memory import NTMMemory
@@ -10,7 +11,7 @@ from .memory import NTMMemory
 class EncapsulatedNTM(nn.Module):
 
     def __init__(self, num_inputs, num_outputs,
-                 controller_size, controller_layers, num_heads, N, M, device):
+                 controller_size, controller_layers, num_heads, N, M, device, model_architecture:str="ntm", seq_len:int=0, use_memory:float=1.0):
         """Initialize an EncapsulatedNTM.
 
         :param num_inputs: External number of inputs.
@@ -35,7 +36,6 @@ class EncapsulatedNTM(nn.Module):
 
         # Create the NTM components
         memory = NTMMemory(N, M, device)
-        controller = LSTMController(num_inputs + M*num_heads, controller_size, controller_layers, device)
         heads = nn.ModuleList([])
         for i in range(num_heads):
             heads += [
@@ -43,7 +43,14 @@ class EncapsulatedNTM(nn.Module):
                 NTMWriteHead(memory, controller_size, device)
             ]
 
-        self.ntm = NTM(num_inputs, num_outputs, controller, memory, heads, device)
+        if model_architecture == "ntm":
+            controller = LSTMController(num_inputs + M*num_heads, controller_size, controller_layers, device)
+            self.ntm = NTM(num_inputs, num_outputs, controller, memory, heads, use_memory, device)
+        else:
+            controller = LSTMController(num_inputs + M, controller_size, controller_layers, device)
+            self.ntm = NTM_cache(num_inputs, num_outputs, controller, memory, heads, seq_len, device)
+        
+
         self.memory = memory
 
     def init_sequence(self, batch_size):

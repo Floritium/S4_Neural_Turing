@@ -4,7 +4,7 @@ import argcomplete
 def init_arguments():
     parser = argparse.ArgumentParser(prog='train.py')
     parser.add_argument('--seed', type=int, default=1000, help="Seed value for RNGs")
-    parser.add_argument('--task', action='store', choices=list(["copy", "repeat-copy", "seq-mnist-ntm", "seq-mnist-lstm"]), default='copy',
+    parser.add_argument('--task', action='store', choices=list(["copy", "repeat-copy", "seq-mnist-ntm", "seq-mnist-lstm", "seq-mnist-ntm-cache"]), default='copy',
                         help="Choose the task to train (default: copy)")
     parser.add_argument('-p', '--param', action='append', default=[],
                         help='Override model params. Example: "-pbatch_size=4 -pnum_heads=2"')
@@ -19,7 +19,6 @@ def init_arguments():
     parser.add_argument('--validation_interval', type=int, default=0, help='Validate the model on the validation. (default: 1)')
 
     argcomplete.autocomplete(parser)
-
     args = parser.parse_args()
 
     return args
