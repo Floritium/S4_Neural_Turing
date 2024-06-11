@@ -65,7 +65,7 @@ def progress_bar(batch_num, report_interval, last_loss):
         "=" * fill, " " * (40 - fill), batch_num, last_loss), end='')
 
 
-def save_checkpoint(net, args, model_parms, batch_num, losses, costs, seq_lengths, time, epoch):
+def save_checkpoint(net, args, model_parms, batch_num, losses, costs, seq_lengths, val_accuracy_list, time, epoch):
     progress_clean()
 
     basename = "{}/{}--seed-{}-epoch-{}-batch-{}-{}".format(args.checkpoint_path, args.task, args.seed, epoch, batch_num, time)
@@ -80,6 +80,7 @@ def save_checkpoint(net, args, model_parms, batch_num, losses, costs, seq_length
         "loss": losses,
         "cost": costs,
         "seq_lengths": seq_lengths,
+        "val_accuracy_list": val_accuracy_list,
         "parameters_model": vars(model_parms)
     }
     open(train_fname, 'wt').write(json.dumps(content))
@@ -242,6 +243,57 @@ def train_batch_lstm(net, criterion, optimizer, X, Y, args):
 
     return loss.item()
 
+def evaluate_ntm(net, val_loader, criterion, args): 
+    correct = 0
+    total = 0
+    total_loss = 0.0
+
+    with torch.no_grad():
+        for X, Y in val_loader:
+            # reset the input sequence and target sequence
+            X = X.permute(1, 0, 2)
+            Y = Y.squeeze(1)
+            
+            batch_size = X.size(1)
+            net.init_sequence(batch_size)
+            inp_seq_len = X.size(0)
+
+            # Feed the sequence + delimiter
+            for i in range(inp_seq_len):
+                outputs, _ = net(X[i])
+
+            loss = criterion(outputs, Y)
+            total_loss += loss.item()
+            
+            _, predicted = torch.max(outputs.data, 1)
+            total += Y.size(0)
+            correct += (predicted == Y).sum().item()
+    
+    accuracy = 100 * correct / total
+    return accuracy
+
+
+def evaluate_lstm(net, val_loader, criterion, args):
+    correct = 0
+    total = 0
+    total_loss = 0.0
+    
+
+    with torch.no_grad():
+        for X, Y in val_loader:
+            X = X.permute(1, 0, 2)
+            Y = Y.squeeze(1)
+            
+            outputs = net(X)
+            loss = criterion(outputs, Y)
+            total_loss += loss.item()
+            
+            _, predicted = torch.max(outputs.data, 1)
+            total += Y.size(0)
+            correct += (predicted == Y).sum().item()
+        
+    accuracy = 100 * correct / total
+    return accuracy
 
 def train_model(model, args):
     # Get the number of batches
@@ -256,7 +308,12 @@ def train_model(model, args):
     costs = []
     seq_lengths = []
     start_ms = get_ms()
+    val_accuracy_list = []
     time = ''.join(str(datetime.datetime.now().strftime("%Y-%m-%d %H-%M-%S")).split())
+
+    # make path dependent on run
+    args.checkpoint_path = args.checkpoint_path + "/" + time + "/" + args.task + "-" + str(model.params.seq_len)
+    os.makedirs(args.checkpoint_path, exist_ok=True)
 
     # get the dataloaders
     train_loader, val_loader = model.dataloader
@@ -294,14 +351,18 @@ def train_model(model, args):
 
             # Checkpoint
             if (args.checkpoint_interval != 0) and (batch_num % args.checkpoint_interval == 0):
-                save_checkpoint(model.net, args, model.params, batch_num, losses, costs, seq_lengths, time, epoch)
+                save_checkpoint(model.net, args, model.params, batch_num, losses, costs, seq_lengths, val_accuracy_list, time, epoch)
         
-        if  (epoch % args.validate) == 0 and args.validate > 0:
+        if (epoch % args.validation_interval) == 0 and args.validation_interval > 0:
             model.net.eval() # set the model to evaluation mode
             print("Validating the model...")
-            for x, y in tqdm(val_loader):
-                result = evaluate(model.net, model.criterion, x, y)
-                LOGGER.info("Validation Loss: %.6f Cost: %.2f", result['loss'], result['cost'])
+            if args.task == 'seq-mnist-lstm':
+                val_accuracy = evaluate_lstm(model.net, val_loader, model.criterion, args)
+            elif args.task == "seq-mnist-ntm":
+                val_accuracy = evaluate_ntm(model.net, val_loader, model.criterion, args)
+            
+            val_accuracy_list += [val_accuracy]
+            LOGGER.info(f"Validation accuracy: {val_accuracy}%")
 
     LOGGER.info("Done training.")
 

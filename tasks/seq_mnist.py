@@ -75,6 +75,7 @@ class SeqMNISTParams_ntm(object):
     device = attrib(default="cpu")
     fraction = attrib(default=0.5)
     use_memory = attrib(default=1.0)
+    seq_len = attrib(default=0)
 
 @attrs
 class SeqMNISTParams_ntm_cache(object):
@@ -99,6 +100,7 @@ class SeqMNISTParams_ntm_cache(object):
     rmsprop_alpha = attrib(default=0.95)
     device = attrib(default="cpu")
     fraction = attrib(default=0.5)
+    seq_len = attrib(default=0)
 
 @attrs
 class SeqMNISTModelTraining_ntm(object):
@@ -112,6 +114,8 @@ class SeqMNISTModelTraining_ntm(object):
     def default_net(self):
         # We have 1 additional input for the delimiter which is passed on a
         # separate "control" channel
+        self.params.seq_len = self.params.resize_resolution**2
+
         net = EncapsulatedNTM(
             num_inputs=self.params.input_dim,
             num_outputs=self.params.output_dim,
@@ -181,7 +185,9 @@ class SeqMNISTModelTraining_ntm_cache(object):
     def default_net(self):
         # We have 1 additional input for the delimiter which is passed on a
         # separate "control" channel
-        self.params.num_heads = self.params.resize_resolution**2
+        self.params.seq_len = self.params.resize_resolution**2
+        self.params.num_heads = self.params.seq_len 
+
         net = EncapsulatedNTM(
             self.params.input_dim,
             self.params.output_dim,
@@ -192,7 +198,7 @@ class SeqMNISTModelTraining_ntm_cache(object):
             self.params.memory_m,
             self.params.device,
             self.params.model_name,
-            self.params.resize_resolution**2,
+            self.params.seq_len,
         )
         return net
 
@@ -252,6 +258,8 @@ class SeqMNISTModelTraining_lstm(object):
     def default_net(self):
         # We have 1 additional input for the delimiter which is passed on a
         # separate "control" channel
+        self.params.seq_len = self.params.resize_resolution**2
+        
         net = LSTMWithLinearLayer(
             self.params.input_dim,
             self.params.controller_size,
