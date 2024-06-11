@@ -11,7 +11,6 @@ import re
 import sys
 import os
 from arg_parser import init_arguments
-
 import attr
 import argcomplete
 import torch
@@ -20,9 +19,12 @@ from tqdm import tqdm
 import wandb
 import datetime 
 
+# Initialize the logger
 LOGGER = logging.getLogger(__name__)
+from evaluate import evaluate_ntm, evaluate_lstm, evaluate
+from utils import progress_bar, progress_clean, get_ms, init_seed, save_checkpoint, clip_grads, update_model_params
 
-
+# Import the tasks
 from tasks.copytask import CopyTaskModelTraining, CopyTaskParams
 from tasks.repeatcopytask import RepeatCopyTaskModelTraining, RepeatCopyTaskParams
 from tasks.seq_mnist import SeqMNISTModelTraining_ntm, SeqMNISTModelTraining_lstm, SeqMNISTParams_ntm, SeqMNISTModelTraining_ntm_cache, SeqMNISTParams_ntm_cache
@@ -34,63 +36,6 @@ TASKS = {
     'seq-mnist-ntm': (SeqMNISTModelTraining_ntm, SeqMNISTParams_ntm), # its basically also cache, as use_memory can be set between [0,1]
     'seq-mnist-lstm': (SeqMNISTModelTraining_lstm, SeqMNISTParams_ntm)
 }
-
-
-def get_ms():
-    """Returns the current time in miliseconds."""
-    return time.time() * 1000
-
-
-def init_seed(seed=None):
-    """Seed the RNGs for predicatability/reproduction purposes."""
-    if seed is None:
-        seed = int(get_ms() // 1000)
-
-    LOGGER.info("Using seed=%d", seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    random.seed(seed)
-
-
-def progress_clean():
-    """Clean the progress bar."""
-    print("\r{}".format(" " * 80), end='\r')
-
-
-def progress_bar(batch_num, report_interval, last_loss):
-    """Prints the progress until the next report."""
-    progress = (((batch_num-1) % report_interval) + 1) / report_interval
-    fill = int(progress * 40)
-    print("\r[{}{}]: {} (Loss: {:.4f})".format(
-        "=" * fill, " " * (40 - fill), batch_num, last_loss), end='')
-
-
-def save_checkpoint(net, args, model_parms, batch_num, losses, costs, seq_lengths, val_accuracy_list, time, epoch):
-    progress_clean()
-
-    basename = "{}/{}--seed-{}-epoch-{}-batch-{}-{}".format(args.checkpoint_path, args.task, args.seed, epoch, batch_num, time)
-    model_fname = basename + ".pth"
-    LOGGER.info("Saving model checkpoint to: '%s'", model_fname)
-    torch.save(net.state_dict(), model_fname)
-
-    # Save the training history
-    train_fname = basename + ".json"
-    LOGGER.info("Saving model training history to '%s'", train_fname)
-    content = {
-        "loss": losses,
-        "cost": costs,
-        "seq_lengths": seq_lengths,
-        "val_accuracy_list": val_accuracy_list,
-        "parameters_model": vars(model_parms)
-    }
-    open(train_fname, 'wt').write(json.dumps(content))
-
-
-def clip_grads(net):
-    """Gradient clipping to the range [10, 10]."""
-    parameters = list(filter(lambda p: p.grad is not None, net.parameters()))
-    for p in parameters:
-        p.grad.data.clamp_(-1, 1)
 
 
 def train_batch_ntm(net, criterion, optimizer, X, Y, args):
@@ -143,8 +88,6 @@ def train_batch_ntm(net, criterion, optimizer, X, Y, args):
 
     return loss.item(), cost.item() / batch_size
 
-
-
 def train_batch_ntm_cache(net, criterion, optimizer, X, Y, args):
     """Trains a single batch."""
 
@@ -176,46 +119,6 @@ def train_batch_ntm_cache(net, criterion, optimizer, X, Y, args):
  
     return loss.item()
 
-
-def evaluate(net, criterion, X, Y):
-    """Evaluate a single batch (without training)."""
-    inp_seq_len = X.size(0)
-    outp_seq_len, batch_size, _ = Y.size()
-
-    # New sequence
-    net.init_sequence(batch_size)
-
-    # Feed the sequence + delimiter
-    states = []
-    for i in range(inp_seq_len):
-        o, state = net(X[i])
-        states += [state]
-
-    # Read the output (no input given)
-    y_out = torch.zeros(Y.size())
-    for i in range(outp_seq_len):
-        y_out[i], state = net()
-        states += [state]
-
-    loss = criterion(y_out, Y)
-
-    y_out_binarized = y_out.clone().data
-    y_out_binarized.apply_(lambda x: 0 if x < 0.5 else 1)
-
-    # The cost is the number of error bits per sequence
-    cost = torch.sum(torch.abs(y_out_binarized - Y.data))
-
-    result = {
-        'loss': loss.data[0],
-        'cost': cost / batch_size,
-        'y_out': y_out,
-        'y_out_binarized': y_out_binarized,
-        'states': states
-    }
-
-    return result
-
-
 def train_batch_lstm(net, criterion, optimizer, X, Y, args):
     """Trains a single batch."""
 
@@ -242,58 +145,6 @@ def train_batch_lstm(net, criterion, optimizer, X, Y, args):
     optimizer.step()
 
     return loss.item()
-
-def evaluate_ntm(net, val_loader, criterion, args): 
-    correct = 0
-    total = 0
-    total_loss = 0.0
-
-    with torch.no_grad():
-        for X, Y in val_loader:
-            # reset the input sequence and target sequence
-            X = X.permute(1, 0, 2)
-            Y = Y.squeeze(1)
-            
-            batch_size = X.size(1)
-            net.init_sequence(batch_size)
-            inp_seq_len = X.size(0)
-
-            # Feed the sequence + delimiter
-            for i in range(inp_seq_len):
-                outputs, _ = net(X[i])
-
-            loss = criterion(outputs, Y)
-            total_loss += loss.item()
-            
-            _, predicted = torch.max(outputs.data, 1)
-            total += Y.size(0)
-            correct += (predicted == Y).sum().item()
-    
-    accuracy = 100 * correct / total
-    return accuracy
-
-
-def evaluate_lstm(net, val_loader, criterion, args):
-    correct = 0
-    total = 0
-    total_loss = 0.0
-    
-
-    with torch.no_grad():
-        for X, Y in val_loader:
-            X = X.permute(1, 0, 2)
-            Y = Y.squeeze(1)
-            
-            outputs = net(X)
-            loss = criterion(outputs, Y)
-            total_loss += loss.item()
-            
-            _, predicted = torch.max(outputs.data, 1)
-            total += Y.size(0)
-            correct += (predicted == Y).sum().item()
-        
-    accuracy = 100 * correct / total
-    return accuracy
 
 def train_model(model, args):
     # Get the number of batches
@@ -364,38 +215,9 @@ def train_model(model, args):
             val_accuracy_list += [val_accuracy]
             LOGGER.info(f"Validation accuracy: {val_accuracy}%")
 
+    # last ceckpoint
+    save_checkpoint(model.net, args, model.params, batch_num, losses, costs, seq_lengths, val_accuracy_list, time, epoch)
     LOGGER.info("Done training.")
-
-
-
-def update_model_params(params, update):
-    """Updates the default parameters using supplied user arguments."""
-
-    update_dict = {}
-    for p in update:
-        m = re.match("(.*)=(.*)", p)
-        if not m:
-            LOGGER.error("Unable to parse param update '%s'", p)
-            sys.exit(1)
-
-
-        k, v = m.groups()
-        print(getattr(params, k))
-        if k == 'use_memory':
-            update_dict[k] = float(v)
-        elif k == "batch_size":
-            update_dict[k] = int(v)
-        else:
-            pass
-
-    try:
-        params = attr.evolve(params, **update_dict)
-    except TypeError as e:
-        LOGGER.error(e)
-        LOGGER.error("Valid parameters: %s", list(attr.asdict(params).keys()))
-        sys.exit(1)
-
-    return params
 
 def init_model(args):
     LOGGER.info("Training for the **%s** task", args.task)
@@ -414,7 +236,6 @@ def init_model(args):
     model = model_cls(params=params)
     return model
 
-
 def init_logging():
     logging.basicConfig(format='[%(asctime)s] [%(levelname)s] [%(name)s]  %(message)s',
                         level=logging.DEBUG)
@@ -423,6 +244,7 @@ def init_logging():
 def main():
     init_logging()
 
+    # Create the checkpoints directory
     os.makedirs('checkpoints', exist_ok=True)
 
     # Initialize arguments

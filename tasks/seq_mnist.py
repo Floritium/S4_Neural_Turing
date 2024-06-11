@@ -62,7 +62,7 @@ class SeqMNISTParams_ntm(object):
     controller_size = attrib(default=100)
     controller_layers = attrib(default=1)
     num_heads = attrib(default=1)
-    resize_resolution = attrib(default=8)
+    resize_resolution = attrib(default=16)
     input_dim = attrib(default=1)
     output_dim = attrib(default=10)
     memory_n = attrib(default=128)
