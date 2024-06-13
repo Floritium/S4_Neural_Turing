@@ -6,12 +6,14 @@ from .ntm_cache import NTM_cache
 from .controller import LSTMController
 from .head import NTMReadHead, NTMWriteHead
 from .memory import NTMMemory
+from .s4 import S4Block as S4D  # Can use full version instead of minimal S4D standalone below
+
 
 
 class EncapsulatedNTM(nn.Module):
 
     def __init__(self, num_inputs, num_outputs,
-                 controller_size, controller_layers, num_heads, N, M, device, model_architecture:str="ntm", seq_len:int=0, use_memory:float=1.0):
+                 controller_size, controller_layers, num_heads, N, M, device, model_architecture:str="ntm", seq_len:int=0, use_memory:float=1.0, lr:float=0.001, args=None):
         """Initialize an EncapsulatedNTM.
 
         :param num_inputs: External number of inputs.
@@ -45,6 +47,9 @@ class EncapsulatedNTM(nn.Module):
 
         if model_architecture == "ntm":
             controller = LSTMController(num_inputs + M*num_heads, controller_size, controller_layers, device)
+            self.ntm = NTM(num_inputs, num_outputs, controller, memory, heads, use_memory, device)
+        elif model_architecture == "ntm_s4d":
+            controller = S4D(num_inputs + M * num_heads, dropout=0.1, transposed=True, lr=min(0.001, lr), mode='s4d', init='diag-lin', bidirectional=False, disc='bilinear', real_transform='exp')
             self.ntm = NTM(num_inputs, num_outputs, controller, memory, heads, use_memory, device)
         else:
             controller = LSTMController(num_inputs + M, controller_size, controller_layers, device)
