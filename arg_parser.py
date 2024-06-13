@@ -4,7 +4,7 @@ import argcomplete
 def init_arguments():
     parser = argparse.ArgumentParser(prog='train.py')
     parser.add_argument('--seed', type=int, default=1000, help="Seed value for RNGs")
-    parser.add_argument('--task', action='store', choices=list(["copy", "repeat-copy", "seq-mnist-ntm", "seq-mnist-lstm", "seq-mnist-ntm-cache"]), default='copy',
+    parser.add_argument('--task', action='store', choices=list(["copy", "repeat-copy", "seq-mnist-ntm", "seq-mnist-lstm", "seq-mnist-ntm-cache", "seq-mnist-ntm-s4d"]), default='copy',
                         help="Choose the task to train (default: copy)")
     parser.add_argument('-p', '--param', action='append', default=[],
                         help='Override model params. Example: "-pbatch_size=4 -pnum_heads=2"')

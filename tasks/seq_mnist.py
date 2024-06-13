@@ -53,12 +53,32 @@ class SequentialMNIST(Dataset):
 #     for batch_num in range(dataloader):
 
 
-
-
 @attrs
 class SeqMNISTParams_ntm(object):
     name = attrib(default="seq-mnist-ntm")
     model_name = "ntm"
+    controller_size = attrib(default=100)
+    controller_layers = attrib(default=1)
+    num_heads = attrib(default=1)
+    resize_resolution = attrib(default=16)
+    input_dim = attrib(default=1)
+    output_dim = attrib(default=10)
+    memory_n = attrib(default=128)
+    memory_m = attrib(default=20)
+    num_batches = attrib(default=0)
+    batch_size = attrib(default=64)
+    rmsprop_lr = attrib(default=1e-4)
+    rmsprop_momentum = attrib(default=0.9)
+    rmsprop_alpha = attrib(default=0.95)
+    device = attrib(default="cpu")
+    fraction = attrib(default=0.5)
+    use_memory = attrib(default=1.0)
+    seq_len = attrib(default=0)
+
+@attrs
+class SeqMNISTParams_ntm_s4d(object):
+    name = attrib(default="seq-mnist-ntm-s4d")
+    model_name = "ntm_s4d"
     controller_size = attrib(default=100)
     controller_layers = attrib(default=1)
     num_heads = attrib(default=1)
@@ -99,7 +119,7 @@ class SeqMNISTParams_ntm_cache(object):
     rmsprop_momentum = attrib(default=0.9)
     rmsprop_alpha = attrib(default=0.95)
     device = attrib(default="cpu")
-    fraction = attrib(default=0.5)
+    fraction = attrib(default=0.8)
     seq_len = attrib(default=0)
 
 @attrs
