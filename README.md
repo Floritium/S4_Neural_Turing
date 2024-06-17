@@ -19,7 +19,7 @@ Ideas: https://app.diagrams.net/#G1cHGAA4ybM5Cu00LdYxlF6Wx5bUun8e5k#%7B%22pageId
     - [ ] Implement the copy task.
     - [ ] Implement the sequential tasks.
 
-## Matrix computations and operations
+## Learning material: Matrix computations and operations
 - [LOW-RANK MATRICES](https://www.ethanepperly.com/index.php/2021/10/26/big-ideas-in-applied-math-low-rank-matrices/)
 - [NYSTRÖM APPROXIMATION](https://www.ethanepperly.com/index.php/2022/10/11/low-rank-approximation-toolbox-nystrom-approximation/)
 
