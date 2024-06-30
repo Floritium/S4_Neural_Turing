@@ -5,6 +5,8 @@ The structured state space neural turing machine (S4D-NTM) is a neural network m
 
 Ideas: https://app.diagrams.net/#G1cHGAA4ybM5Cu00LdYxlF6Wx5bUun8e5k#%7B%22pageId%22%3A%22vaXz-TmzTlR2uNQX9Hex%22%7D
 
+Credit: adapted code from https://github.com/loudinthecloud/pytorch-ntm
+
 ## Task
 - [ ] Understand the structured state space neural turing machine (S4D-NTM) and its application in the context of the S4 model.
 - [ ] Implement the S4D-NTM model in PyTorch.
@@ -15,9 +17,9 @@ Ideas: https://app.diagrams.net/#G1cHGAA4ybM5Cu00LdYxlF6Wx5bUun8e5k#%7B%22pageId
   - [ ] S4D-NTM.
     - [ ] Implement the copy task.
     - [ ] Implement the sequential tasks.
-  - [ ] LSTM on the same tasks (maybe use reference chart from the S4 paper).
-    - [ ] Implement the copy task.
-    - [ ] Implement the sequential tasks.
+  - [x] LSTM on the same tasks (maybe use reference chart from the S4 paper).
+    - [x] Implement the copy task.
+    - [x] Implement the sequential tasks.
 
 ## Learning material: Matrix computations and operations
 - [LOW-RANK MATRICES](https://www.ethanepperly.com/index.php/2021/10/26/big-ideas-in-applied-math-low-rank-matrices/)
