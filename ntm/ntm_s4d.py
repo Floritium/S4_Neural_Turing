@@ -6,7 +6,7 @@ import random
 
 class NTM_S4D(nn.Module):
     """A Neural Turing Machine."""
-    def __init__(self, num_inputs, num_outputs, controller, memory, heads, use_memory, n_layers, device):
+    def __init__(self, num_inputs, num_outputs, controller, memory, heads, use_memory, device):
         """Initialize the NTM.
 
         :param num_inputs: External input size.
@@ -19,7 +19,7 @@ class NTM_S4D(nn.Module):
               write heads independently, also, the order by which the heads are
               called in controlled by the user (order in list)
         """
-        super(NTM, self).__init__()
+        super(NTM_S4D, self).__init__()
 
         # Save arguments
         self.num_inputs = num_inputs
@@ -45,21 +45,21 @@ class NTM_S4D(nn.Module):
         assert self.num_read_heads > 0, "heads list must contain at least a single read head"
 
         # Linear encoder (d_input = 1 for grayscale and 3 for RGB)
-        self.prenorm = prenorm
-        self.encoder = nn.Linear(self.num_inputs, d_model)
+        # self.prenorm = prenorm
+        # self.encoder = nn.Linear(self.num_inputs, d_model)
 
         # Stack S4 layers as residual blocks
         self.controller = controller
         self.s4_layers = nn.ModuleList()
         self.norms = nn.ModuleList()
         self.dropouts = nn.ModuleList()
-        for _ in range(n_layers):
-            self.s4_layers.append(
-                self.controller
-                #S4(d_model, dropout=dropout, transposed=True, lr=min(0.001, args.lr), mode='s4d', init='diag-lin', bidirectional=False, disc='bilinear', real_transform='exp')
-            )
-            self.norms.append(nn.LayerNorm(d_model))
-            self.dropouts.append(dropout_fn(dropout))
+        # for _ in range(n_layers):
+        #     self.s4_layers.append(
+        #         self.controller
+        #         #S4(d_model, dropout=dropout, transposed=True, lr=min(0.001, args.lr), mode='s4d', init='diag-lin', bidirectional=False, disc='bilinear', real_transform='exp')
+        #     )
+        #     self.norms.append(nn.LayerNorm(d_model))
+        #     self.dropouts.append(dropout_fn(dropout))
 
         # Linear decoder
         self.decoder = nn.Linear(self.controller_size + self.num_read_heads * self.M, self.num_outputs)

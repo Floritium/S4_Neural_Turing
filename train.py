@@ -33,8 +33,8 @@ TASKS = {
     'copy': (CopyTaskModelTraining, CopyTaskParams),
     'repeat-copy': (RepeatCopyTaskModelTraining, RepeatCopyTaskParams),
     'seq-mnist-ntm-cache': (SeqMNISTModelTraining_ntm_cache, SeqMNISTParams_ntm_cache),
-    'seq-mnist-ntm': (SeqMNISTModelTraining_ntm, SeqMNISTParams_ntm), # its basically also cache, as use_memory can be set between [0,1]
-    'seq-mnist-lstm': (SeqMNISTModelTraining_lstm, SeqMNISTParams_ntm)
+    'seq-mnist-ntm': (SeqMNISTModelTraining_ntm, SeqMNISTParams_ntm), # its basically also cache, as -puse_memory can be set between [0,1]
+    'seq-mnist-lstm': (SeqMNISTModelTraining_lstm, SeqMNISTParams_ntm),
     'seq-mnist-ntm-s4d': (SeqMNISTModelTraining_ntm, SeqMNISTParams_ntm_s4d)
 }
 
@@ -59,15 +59,15 @@ def train_batch_ntm(net, criterion, optimizer, X, Y, args):
     inp_seq_len = X.size(0)
 
     # get the size of the output sequence for copy and recall task
-    if args.task != 'seq-mnist-ntm': or args.task != "seq-mnist-ntm-s4d"
+    if args.task == 'copy' or args.task == 'repeat-copy':
         outp_seq_len, batch_size, _ = Y.size()
-
+    
     # Feed the sequence + delimiter
     for i in range(inp_seq_len):
         y_out, _ = net(X[i])
 
     # Read the output (no input given)
-    if args.task != 'seq-mnist-ntm' or or args.task != "seq-mnist-ntm-s4d":
+    if args.task == 'copy' or args.task == 'repeat-copy':
         y_out = torch.zeros(Y.size())
         for i in range(outp_seq_len):
             out, _ = net()

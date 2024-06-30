@@ -7,7 +7,7 @@ from .controller import LSTMController
 from .head import NTMReadHead, NTMWriteHead
 from .memory import NTMMemory
 from .s4 import S4Block as S4D  # Can use full version instead of minimal S4D standalone below
-
+from .ntm_s4d import NTM_S4D
 
 
 class EncapsulatedNTM(nn.Module):
@@ -50,7 +50,7 @@ class EncapsulatedNTM(nn.Module):
             self.ntm = NTM(num_inputs, num_outputs, controller, memory, heads, use_memory, device)
         elif model_architecture == "ntm_s4d":
             controller = S4D(num_inputs + M * num_heads, dropout=0.1, transposed=True, lr=min(0.001, lr), mode='s4d', init='diag-lin', bidirectional=False, disc='bilinear', real_transform='exp')
-            self.ntm = NTM(num_inputs, num_outputs, controller, memory, heads, use_memory, device)
+            self.ntm = NTM_S4D(num_inputs, num_outputs, controller, memory, heads, use_memory, device)
         else:
             controller = LSTMController(num_inputs + M, controller_size, controller_layers, device)
             self.ntm = NTM_cache(num_inputs, num_outputs, controller, memory, heads, seq_len, device)
