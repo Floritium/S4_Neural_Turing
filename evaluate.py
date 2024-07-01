@@ -82,6 +82,27 @@ def evaluate_lstm(net, val_loader, criterion, args):
     return accuracy
 
 
+def evaluate_ntms4d(net, val_loader, criterion, args):
+    correct = 0
+    total = 0
+    total_loss = 0.0
+
+    with torch.no_grad():
+        for X, Y in val_loader:
+            Y = Y.squeeze(1)
+
+            outputs, _ = net(X)
+            loss = criterion(outputs, Y)
+            total_loss += loss.item()
+
+            _, predicted = torch.max(outputs.data, 1)
+            total += Y.size(0)
+            correct += (predicted == Y).sum().item()
+
+    accuracy = 100 * correct / total
+    return accuracy
+
+
 def evaluate(net, criterion, X, Y):
     """Evaluate a single batch (without training)."""
     inp_seq_len = X.size(0)

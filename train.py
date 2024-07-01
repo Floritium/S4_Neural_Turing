@@ -21,7 +21,7 @@ import datetime
 
 # Initialize the logger
 LOGGER = logging.getLogger(__name__)
-from evaluate import evaluate_ntm, evaluate_lstm, evaluate
+from evaluate import evaluate_ntm, evaluate_lstm, evaluate_ntms4d, evaluate
 from utils import progress_bar, progress_clean, get_ms, init_seed, save_checkpoint, clip_grads, update_model_params
 
 # Import the tasks
@@ -147,7 +147,35 @@ def train_batch_lstm(net, criterion, optimizer, X, Y, args):
 
     return loss.item()
 
-def train_model(model, args):
+def train_batch_ntms4d(net, criterion, optimizer, X, Y, args):
+    """Trains a single batch."""
+
+    optimizer.zero_grad()
+
+    # Transfer to GPU
+    X = X.to(net.device)
+    Y = Y.to(net.device)
+    Y = Y.squeeze(1)
+
+    batch_size = X.size(0)
+    net.init_sequence(batch_size)
+
+    # Forward
+    Y_pred, _ = net(X)
+
+    # Compute the loss
+    loss = criterion(Y_pred, Y)
+    loss.backward()
+
+    # Clip gradients
+    clip_grads(net)
+
+    # Update parameters
+    optimizer.step()
+
+    return loss.item(), 0
+
+def train_model(model, args, scheduler=None):
     # Get the number of batches
     num_batches = model.params.num_batches
     batch_size = model.params.batch_size
@@ -176,6 +204,8 @@ def train_model(model, args):
         for batch_num, (x, y) in enumerate(tqdm(train_loader)):
             if args.task == 'seq-mnist-ntm' or args.task == 'copy' or args.task == 'repeat-copy':
                 loss, cost = train_batch_ntm(model.net, model.criterion, model.optimizer, x, y, args)
+            if args.task == 'seq-mnist-ntm-s4d':
+                loss, cost = train_batch_ntms4d(model.net, model.criterion, model.optimizer, x, y, args)
             if args.task == 'seq-mnist-ntm-cache':
                 loss = train_batch_ntm_cache(model.net, model.criterion, model.optimizer, x, y, args)
                 cost = loss
@@ -212,9 +242,15 @@ def train_model(model, args):
                 val_accuracy = evaluate_lstm(model.net, val_loader, model.criterion, args)
             elif args.task == "seq-mnist-ntm":
                 val_accuracy = evaluate_ntm(model.net, val_loader, model.criterion, args)
+            elif args.task == "seq-mnist-ntm-s4d":
+                val_accuracy = evaluate_ntms4d(model.net, val_loader, model.criterion, args)
             
             val_accuracy_list += [val_accuracy]
             LOGGER.info(f"Validation accuracy: {val_accuracy}%")
+
+    # for ntm-s4d
+    if scheduler is not None:
+        scheduler.step()
 
     # last ceckpoint
     save_checkpoint(model.net, args, model.params, batch_num, losses, costs, seq_lengths, val_accuracy_list, time, epoch)
@@ -242,6 +278,53 @@ def init_logging():
                         level=logging.DEBUG)
 
 
+
+def setup_optimizer(model, lr, weight_decay, epochs):
+    """
+    S4 requires a specific optimizer setup.
+
+    The S4 layer (A, B, C, dt) parameters typically
+    require a smaller learning rate (typically 0.001), with no weight decay.
+
+    The rest of the model can be trained with a higher learning rate (e.g. 0.004, 0.01)
+    and weight decay (if desired).
+    """
+
+    # All parameters in the model
+    all_parameters = list(model.parameters())
+
+    # General parameters don't contain the special _optim key
+    params = [p for p in all_parameters if not hasattr(p, "_optim")]
+
+    # Create an optimizer with the general parameters
+    optimizer = torch.optim.AdamW(params, lr=lr, weight_decay=weight_decay)
+
+    # Add parameters with special hyperparameters
+    hps = [getattr(p, "_optim") for p in all_parameters if hasattr(p, "_optim")]
+    hps = [
+        dict(s) for s in sorted(list(dict.fromkeys(frozenset(hp.items()) for hp in hps)))
+    ]  # Unique dicts
+    for hp in hps:
+        params = [p for p in all_parameters if getattr(p, "_optim", None) == hp]
+        optimizer.add_param_group(
+            {"params": params, **hp}
+        )
+
+    # Create a lr scheduler
+    # scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=patience, factor=0.2)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, epochs)
+
+    # Print optimizer info
+    keys = sorted(set([k for hp in hps for k in hp.keys()]))
+    for i, g in enumerate(optimizer.param_groups):
+        group_hps = {k: g.get(k, None) for k in keys}
+        print(' | '.join([
+            f"Optimizer group {i}",
+            f"{len(g['params'])} tensors",
+        ] + [f"{k} {v}" for k, v in group_hps.items()]))
+
+    return optimizer, scheduler
+
 def main():
     init_logging()
 
@@ -257,8 +340,14 @@ def main():
     # Initialize the model
     model = init_model(args)
 
+    # # Setup the optimizer when using NTM-S4D
+    # if args.task == 'seq-mnist-ntm-s4d':
+    #     model.optimizer, scheduler = setup_optimizer(model.net.controller, model.params.rmsprop_lr, 0, args.epochs)
+    # else:
+    scheduler = None
+
     LOGGER.info("Total number of parameters: %d", model.net.calculate_num_params())
-    train_model(model, args)
+    train_model(model, args, scheduler)
 
 
 if __name__ == '__main__':

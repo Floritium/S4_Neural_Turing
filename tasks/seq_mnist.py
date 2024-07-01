@@ -44,14 +44,6 @@ class SequentialMNIST(Dataset):
         target_label = self.dataset[idx][1]
         return input_seq, torch.tensor([target_label])
 
-# def dataloader(num_batches,
-#                batch_size,
-#                max_len,
-#                dataset):
-#     """Generator of random sequences for the copy task."""
-#     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
-#     for batch_num in range(dataloader):
-
 
 @attrs
 class SeqMNISTParams_ntm(object):
@@ -79,7 +71,7 @@ class SeqMNISTParams_ntm(object):
 class SeqMNISTParams_ntm_s4d(object):
     name = attrib(default="seq-mnist-ntm-s4d")
     model_name = "ntm_s4d"
-    controller_size = attrib(default=100)
+    controller_size = attrib(default=1344)
     controller_layers = attrib(default=1)
     num_heads = attrib(default=1)
     resize_resolution = attrib(default=16)

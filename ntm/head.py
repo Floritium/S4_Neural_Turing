@@ -56,6 +56,7 @@ class NTMReadHead(NTMHeadBase):
     def __init__(self, memory, controller_size, device):
         super(NTMReadHead, self).__init__(memory, controller_size)
         self.device = device
+        self.controller_size = controller_size
 
         # Corresponding to k, β, g, s, γ sizes from the paper
         self.read_lengths = [self.M, 1, 1, 3, 1]

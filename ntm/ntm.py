@@ -83,11 +83,11 @@ class NTM(nn.Module):
             for head, prev_head_state in zip(self.heads, prev_heads_states):
                 if head.is_read_head():
                     # input the hidden cell state of the controller
-                    r, head_state = head(controller_state[-1].squeeze(0), prev_head_state) # output r=(batch_size x M), head_state=(batch_size x N)
+                    r, head_state = head(controller_outp, prev_head_state) # output r=(batch_size x M), head_state=(batch_size x N)
                     reads += [r]
                 else:
                     # input the hidden cell state of the controller
-                    head_state = head(controller_state[-1].squeeze(0), prev_head_state)
+                    head_state = head(controller_outp, prev_head_state)
                 heads_states += [head_state]
         else:
             # hold in cache for the next iteration
@@ -95,7 +95,7 @@ class NTM(nn.Module):
             heads_states = prev_heads_states
 
         # Generate Output
-        inp2 = torch.cat([controller_state[-1].squeeze(0)] + reads, dim=1)
+        inp2 = torch.cat([controller_outp] + reads, dim=1)
         o = self.fc(inp2)
 
         # Pack the current state
