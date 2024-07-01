@@ -71,7 +71,7 @@ class SeqMNISTParams_ntm(object):
 class SeqMNISTParams_ntm_s4d(object):
     name = attrib(default="seq-mnist-ntm-s4d")
     model_name = "ntm_s4d"
-    controller_size = attrib(default=1344)
+    controller_size = attrib(default=100)
     controller_layers = attrib(default=1)
     num_heads = attrib(default=1)
     resize_resolution = attrib(default=16)

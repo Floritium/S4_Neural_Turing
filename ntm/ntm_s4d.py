@@ -44,15 +44,15 @@ class NTM_S4D(nn.Module):
 
         assert self.num_read_heads > 0, "heads list must contain at least a single read head"
 
-        # Linear encoder (d_input = 1 for grayscale and 3 for RGB)
-        # self.prenorm = prenorm
-        # self.encoder = nn.Linear(self.num_inputs, self.num_outputs)
 
         # Stack S4 layers as residual blocks
         self.controller = controller
         self.s4_layers = nn.ModuleList()
         self.norms = nn.ModuleList()
         self.dropouts = nn.ModuleList()
+
+        # Linear encoder (d_input = num_inputs + M * num_heads)
+        self.encoder = nn.Linear(self.num_inputs, self.controller_size) # (B, L, d_input) -> (B, L, d_model)
 
         # Linear decoder
         self.decoder = nn.Linear(self.controller_size + self.num_read_heads * self.M, self.num_outputs) # 2 for magnitude and phase features
@@ -82,10 +82,13 @@ class NTM_S4D(nn.Module):
 
         # Use the controller to get an embeddings
 
+        x = torch.cat([x] + [memory_read.unsqueeze(1).repeat(1, x.shape[1], 1) for memory_read in prev_reads], dim=-1) # augement the input with the previous memory reads as additional features
+        x = self.encoder(x) # (B, L, d_input) -> (B, L, d_model)
         x = x.transpose(-1, -2)  # (B, L, d_model) -> (B, d_model, L)
-        inp = torch.cat([x] + [memory_read.unsqueeze(2).repeat(1, 1, 256) for memory_read in prev_reads], dim=1) # augement the input with the previous memory reads as additional features
-        controller_outp, controller_state = self.controller(inp, state=prev_controller_state)
 
+        controller_outp, controller_state = self.controller(x, state=prev_controller_state) #@tbd if the state is needed, as we are not using the hidden state of the controller directly but rather the output of the controller (s4d block output)
+
+        # @TODO: Implement for another S4D variant, as we here use the hidden state directly
         # seperte the real and imaginary parts and use the maginute to hold on the information and passing them as a real numbers to the heads
         hidden_real = controller_state.real
         hidden_imag = controller_state.imag
@@ -94,9 +97,9 @@ class NTM_S4D(nn.Module):
         hidden_mag_pha = torch.stack((magnitude, phase), dim=-1)
         magnitude_hidden = hidden_mag_pha.view(hidden_mag_pha.size(0), -1)
 
-        x = controller_outp + x
-        x = x.transpose(-1, -2)
-        x = x.mean(dim=1)
+        x = controller_outp + x # residual connection
+        x = x.transpose(-1, -2) # (B, d_model, L) -> (B, L, d_model)
+        x = x.mean(dim=1) # average over the sequence length and use it for the read and write heads, i.e. pooling the time dimension and use it in the heads for interacting with the memory. Hence we only interact with the memory once per sequence and not during each time step as in vanilla NTM.
 
         # Read/Write from the list of heads
         interact_with_memory = random.random() < self.use_memory
@@ -106,11 +109,11 @@ class NTM_S4D(nn.Module):
             for head, prev_head_state in zip(self.heads, prev_heads_states):
                 if head.is_read_head():
                     # input the hidden cell state of the controller
-                    r, head_state = head(magnitude_hidden, prev_head_state) # output r=(batch_size x M), head_state=(batch_size x N)
+                    r, head_state = head(x, prev_head_state) # output r=(batch_size x M), head_state=(batch_size x N)
                     reads += [r]
                 else:
                     # input the hidden cell state of the controller
-                    head_state = head(magnitude_hidden, prev_head_state)
+                    head_state = head(x, prev_head_state)
                 heads_states += [head_state]
         else:
             # hold in cache for the next iteration
@@ -118,7 +121,7 @@ class NTM_S4D(nn.Module):
             heads_states = prev_heads_states
 
         # Generate Output
-        inp2 = torch.cat([magnitude_hidden] + reads, dim=1)
+        inp2 = torch.cat([x] + reads, dim=1)
         o = self.decoder(inp2)
 
         # Pack the current state

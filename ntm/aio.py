@@ -50,8 +50,8 @@ class EncapsulatedNTM(nn.Module):
             self.controller = LSTMController(num_inputs + M*num_heads, controller_size, controller_layers, device)
             self.ntm = NTM(num_inputs + M*num_heads, num_outputs, self.controller , memory, heads, use_memory, device)
         elif model_architecture == "ntm_s4d":
-            self.controller  = S4D(num_inputs + M * num_heads, dropout=0.1, transposed=True, lr=min(0.001, lr), mode='s4d', init='diag-lin', bidirectional=False, disc='bilinear', real_transform='exp')
-            self.ntm = NTM_S4D(num_inputs + M*num_heads, num_outputs, self.controller , controller_size, memory, heads, use_memory, device)
+            self.controller  = S4D(self.controller_size, dropout=0.1, transposed=True, lr=min(0.001, lr), mode='s4d', init='diag-lin', bidirectional=False, disc='bilinear', real_transform='exp')
+            self.ntm = NTM_S4D(num_inputs + M*num_heads, num_outputs, self.controller, controller_size, memory, heads, use_memory, device)
             # controller_size = S4D.layer.kernel.N * num_inputs + M*num_heads
         else:
             self.controller  = LSTMController(num_inputs + M, controller_size, controller_layers, device)
