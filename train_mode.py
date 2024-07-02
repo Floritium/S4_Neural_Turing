@@ -28,7 +28,7 @@ def train_batch_ntm(net, criterion, optimizer, X, Y, args):
     Y = Y.to(net.device)
 
     # reset the input sequence and target sequence
-    if args.task == 'seq-mnist-ntm' or args.task == "seq-mnist-ntm-s4d":
+    if args.task == 'seq-mnist-ntm':
         X = X.permute(1, 0, 2)
         Y = Y.squeeze(1)
     

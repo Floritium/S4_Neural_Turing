@@ -63,7 +63,7 @@ class SeqMNISTParams_ntm(object):
     rmsprop_momentum = attrib(default=0.9)
     rmsprop_alpha = attrib(default=0.95)
     device = attrib(default="cpu")
-    fraction = attrib(default=0.5)
+    fraction = attrib(default=0.9)
     use_memory = attrib(default=1.0)
     seq_len = attrib(default=0)
 
@@ -85,7 +85,7 @@ class SeqMNISTParams_ntm_s4d(object):
     rmsprop_momentum = attrib(default=0.9)
     rmsprop_alpha = attrib(default=0.95)
     device = attrib(default="cpu")
-    fraction = attrib(default=0.5)
+    fraction = attrib(default=0.9)
     use_memory = attrib(default=1.0)
     seq_len = attrib(default=0)
 

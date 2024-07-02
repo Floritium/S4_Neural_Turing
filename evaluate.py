@@ -89,6 +89,11 @@ def evaluate_ntms4d(net, val_loader, criterion, args):
 
     with torch.no_grad():
         for X, Y in val_loader:
+            # to device
+            X = X.to(net.device)
+            Y = Y.to(net.device)
+
+            # continue with performance/inference
             batch_size = X.size(0)
             net.init_sequence(batch_size)
             Y = Y.squeeze(1)
