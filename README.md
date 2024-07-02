@@ -14,12 +14,18 @@ Credit: adapted code from https://github.com/loudinthecloud/pytorch-ntm
   - [x] Baseline plain NTM model.
     - [x] Implement the copy task.
     - [x] Implement the sequential task.
-  - [ ] S4D-NTM.
+  - [x] S4D-NTM.
     - [ ] Implement the copy task.
-    - [ ] Implement the sequential tasks.
+    - [x] Implement the sequential tasks.
   - [x] LSTM on the same tasks (maybe use reference chart from the S4 paper).
     - [x] Implement the copy task.
     - [x] Implement the sequential tasks.
+
+## Temp
+- [ ] NTM-S4D, 256-seq, 5 epochs 
+- [x] NTM-S4D, 784-seq, 5 epochs (checkpoints/2024-07-0211-36-16/seq-mnist-ntm-s4d--seed-1000-epoch-5-batch-5399-2024-07-0211-36-16.json)
+- [ ] S4D, 256-seq, 5 epochs
+- [ ] S4D, 784-seq, 5 epochs
 
 ## Learning material: Matrix computations and operations
 - [LOW-RANK MATRICES](https://www.ethanepperly.com/index.php/2021/10/26/big-ideas-in-applied-math-low-rank-matrices/)
@@ -29,6 +35,8 @@ Credit: adapted code from https://github.com/loudinthecloud/pytorch-ntm
 Train the model using the following tasks:
 ```bash
 python train.py --task seq-mnist-ntm --checkpoint_interval 20 --report_interval 10 -pbatch_size=64 --epochs=1 --validation_interval=0 --seed 1000
+...
+train.py --task seq-mnist-ntm --checkpoint_interval 100 --report_interval 100 -pbatch_size=10 -puse_memory=1 --epochs=3 --validation_interval=1 --seed 1000
 ...
 python train.py --task seq-mnist-lstm --checkpoint_interval 20 --report_interval 10 -pbatch_size=64 --epochs=100 --validation_interval=0 --seed 1000
 ```
